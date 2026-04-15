@@ -166,9 +166,52 @@ BLOCKED_COMMANDS_WINDOWS = [
 
 ---
 
-### 4.4 终端交互界面
+### 4.4 终端交互界面（CLI）
 
-工具状态使用 ASCII 前缀保证兼容：
+**模块**：`by19code/cli/`
+
+**职责**：提供用户交互界面，处理命令输入，渲染 AI 回复和工具执行状态。
+
+#### 4.4.1 架构设计
+
+```
+by19code/cli/
+├── __init__.py
+├── app.py          # 主应用逻辑（REPL 循环）
+└── renderer.py     # 终端渲染器（rich 封装）
+```
+
+#### 4.4.2 渲染器（renderer.py）
+
+使用 rich 库进行终端渲染，提供以下功能：
+
+**1. 流式事件渲染**
+
+```python
+def render_stream(event: StreamEvent) -> None:
+    """根据事件类型渲染不同样式"""
+    match event.event_type:
+        case "text_delta":
+            # 流式打印文本（无换行）
+            console.print(event.data, end="")
+        case "tool_call_start":
+            # 显示工具调用开始
+            console.print(f"\n[工具] 调用: {event.data.name}", style="cyan")
+        case "tool_call_end":
+            # 显示工具参数（格式化 JSON）
+            console.print(f"  参数: {json.dumps(event.data.arguments, ensure_ascii=False)}", style="dim")
+        case "usage":
+            # 显示 token 用量（灰色小字）
+            console.print(f"\n[Token] {event.data.total_tokens} tokens", style="dim")
+        case "done":
+            # 换行结束
+            console.print()
+        case "error":
+            # 红色错误信息
+            console.print(f"\n[错误] {event.data}", style="bold red")
+```
+
+**2. 工具状态前缀（ASCII 兼容）**
 
 ```
 [文件] 创建: app\main.py
@@ -178,6 +221,153 @@ BLOCKED_COMMANDS_WINDOWS = [
 [完成] 项目创建完成
 [错误] 文件路径超出项目范围
 ```
+
+**3. 欢迎信息**
+
+```python
+def render_welcome() -> None:
+    """显示欢迎信息和帮助"""
+    console.print(Panel.fit(
+        "[bold cyan]BY19Code v0.1.0[/bold cyan] - AI 编程助手\n\n"
+        "命令列表：\n"
+        "  /help     - 显示帮助\n"
+        "  /clear    - 清空对话历史\n"
+        "  /compact  - 压缩上下文\n"
+        "  /stats    - 查看上下文统计\n"
+        "  /cost     - 查看费用汇总\n"
+        "  /switch <provider> - 切换模型\n"
+        "  /exit     - 退出程序\n\n"
+        "直接输入文本开始对话。按 Ctrl+C 可随时中断。",
+        title="欢迎使用"
+    ))
+```
+
+#### 4.4.3 主应用（app.py）
+
+**CLIApp 类**：
+
+```python
+class CLIApp:
+    def __init__(self, config: AppConfig, project_root: Path):
+        self.config = config
+        self.project_root = project_root
+        self.engine = ChatEngine(config, project_root)
+        self.renderer = Renderer()
+    
+    async def run(self) -> None:
+        """主 REPL 循环"""
+        self.renderer.render_welcome()
+        
+        while True:
+            try:
+                # 读取用户输入
+                user_input = Prompt.ask("\n[bold green]>[/bold green]")
+                
+                # 处理命令或对话
+                if user_input.startswith("/"):
+                    await self._handle_command(user_input)
+                else:
+                    await self._handle_chat(user_input)
+            
+            except KeyboardInterrupt:
+                console.print("\n[yellow]已中断[/yellow]")
+                continue
+            except EOFError:
+                break
+    
+    async def _handle_command(self, command: str) -> None:
+        """处理斜杠命令"""
+        parts = command.split(maxsplit=1)
+        cmd = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ""
+        
+        match cmd:
+            case "/help":
+                self.renderer.render_welcome()
+            case "/clear":
+                result = self.engine.clear_history()
+                console.print(result, style="green")
+            case "/compact":
+                result = self.engine.compact_context()
+                console.print(result, style="green")
+            case "/stats":
+                result = self.engine.get_context_stats()
+                console.print(result)
+            case "/cost":
+                result = await self.engine.get_cost_summary()
+                console.print(result)
+            case "/switch":
+                if not args:
+                    console.print("[错误] 请指定 provider 名称", style="red")
+                    return
+                result = await self.engine.switch_model(args)
+                console.print(result, style="green")
+            case "/exit" | "/quit":
+                console.print("[yellow]再见！[/yellow]")
+                raise EOFError
+            case _:
+                console.print(f"[错误] 未知命令: {cmd}", style="red")
+    
+    async def _handle_chat(self, user_input: str) -> None:
+        """处理普通对话"""
+        try:
+            async for event in self.engine.chat(user_input):
+                self.renderer.render_stream(event)
+        except Exception as e:
+            console.print(f"\n[错误] {e}", style="bold red")
+```
+
+#### 4.4.4 程序入口（main.py）
+
+```python
+import asyncio
+import click
+from pathlib import Path
+
+from by19code.config.settings import load_config
+from by19code.db.database import init_db
+from by19code.cli.app import CLIApp
+
+@click.command()
+@click.option("--config", help="配置文件路径")
+@click.option("--project", help="项目根目录", default=".")
+def main(config: str | None, project: str):
+    """BY19Code - AI 编程助手"""
+    
+    # Windows 事件循环策略
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    
+    # 加载配置
+    app_config = load_config(config_path=config)
+    
+    # 初始化数据库
+    asyncio.run(init_db(app_config.database.path))
+    
+    # 创建并运行 CLI 应用
+    project_root = Path(project).resolve()
+    app = CLIApp(app_config, project_root)
+    
+    try:
+        asyncio.run(app.run())
+    except KeyboardInterrupt:
+        print("\n再见！")
+
+if __name__ == "__main__":
+    main()
+```
+
+#### 4.4.5 Windows 兼容性
+
+| 特性 | Windows Terminal | cmd.exe |
+|------|------------------|---------|
+| UTF-8 输入输出 | ✅ 完整支持 | ✅ 支持（需设置 chcp 65001） |
+| Rich 样式渲染 | ✅ 完整支持 | ⚠️ 部分降级 |
+| Emoji | ✅ 支持 | ❌ 不支持（用 ASCII 前缀） |
+| 流式输出 | ✅ 流畅 | ✅ 流畅 |
+| Ctrl+C 中断 | ✅ 支持 | ✅ 支持 |
+
+**推荐使用 Windows Terminal 以获得最佳体验。**
 
 ---
 
