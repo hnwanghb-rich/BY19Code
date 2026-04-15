@@ -12,8 +12,15 @@ from by19code.core.sandbox import (
     CommandTimeoutError,
     CommandPathError,
 )
+from by19code.core.tools import (
+    TOOL_DEFINITIONS,
+    execute_tool,
+    get_tool_definitions,
+    get_tool_by_name,
+)
 
 __all__ = [
+    # 命令沙箱
     "run_command",
     "run_command_sync",
     "CommandResult",
@@ -21,6 +28,11 @@ __all__ = [
     "CommandBlockedError",
     "CommandTimeoutError",
     "CommandPathError",
+    # 工具系统
+    "TOOL_DEFINITIONS",
+    "execute_tool",
+    "get_tool_definitions",
+    "get_tool_by_name",
 ]
 
 # TODO: T11 实现对话引擎
