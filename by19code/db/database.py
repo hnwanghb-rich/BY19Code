@@ -113,21 +113,25 @@ async def init_db(db_path: Path | str) -> aiosqlite.Connection:
     """
     global _db
 
-    # 路径展开与规范化
-    expanded = os.path.expandvars(str(db_path))
-    resolved = Path(expanded).expanduser().resolve()
+    # 特殊处理：内存数据库
+    if db_path == ":memory:":
+        resolved = ":memory:"
+    else:
+        # 路径展开与规范化
+        expanded = os.path.expandvars(str(db_path))
+        resolved = Path(expanded).expanduser().resolve()
 
-    # 自动建父目录
-    try:
-        resolved.parent.mkdir(parents=True, exist_ok=True)
-        logger.debug("[数据库] 目录就绪: %s", resolved.parent)
-    except OSError as exc:
-        logger.error("[数据库] 创建目录失败 %s: %s", resolved.parent, exc)
-        raise
+        # 自动建父目录
+        try:
+            resolved.parent.mkdir(parents=True, exist_ok=True)
+            logger.debug("[数据库] 目录就绪: %s", resolved.parent)
+        except OSError as exc:
+            logger.error("[数据库] 创建目录失败 %s: %s", resolved.parent, exc)
+            raise
 
     # 打开连接
     try:
-        conn = await aiosqlite.connect(resolved)
+        conn = await aiosqlite.connect(str(resolved))
         conn.row_factory = aiosqlite.Row
         # WAL 模式：并发读性能更好，写操作不阻塞读
         await conn.execute("PRAGMA journal_mode=WAL")
