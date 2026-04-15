@@ -19,6 +19,7 @@ from by19code.core.tools import (
     get_tool_by_name,
 )
 from by19code.core.engine import ChatEngine
+from by19code.core.context import ContextManager
 
 __all__ = [
     # 命令沙箱
@@ -36,6 +37,6 @@ __all__ = [
     "get_tool_by_name",
     # 对话引擎
     "ChatEngine",
+    # 上下文管理
+    "ContextManager",
 ]
-
-# TODO: T12 实现上下文管理器

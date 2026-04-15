@@ -33,6 +33,7 @@ from by19code.llm.base import (
 )
 from by19code.llm.factory import LLMFactory
 from by19code.core.tools import execute_tool, get_tool_definitions
+from by19code.core.context import ContextManager
 from by19code.db.database import get_db
 from by19code.db.models import add_token_usage
 
@@ -70,8 +71,8 @@ class ChatEngine:
         # 创建 LLM Provider
         self.provider: LLMProvider = LLMFactory.create(config)
 
-        # 对话历史（TODO: T12 替换为 ContextManager）
-        self.messages: list[Message] = []
+        # 上下文管理器（T12）
+        self.context = ContextManager(max_tokens=100000)
 
         # 初始化 System Prompt
         self._init_system_prompt()
@@ -105,7 +106,7 @@ class ChatEngine:
 - 使用工具时要谨慎，确保操作的正确性
 """
 
-        self.messages.append(Message(role="system", content=system_content))
+        self.context.add_message(Message(role="system", content=system_content))
         logger.debug("[引擎] System Prompt 已初始化")
 
     async def chat(self, user_input: str) -> AsyncGenerator[StreamEvent, None]:
@@ -131,7 +132,7 @@ class ChatEngine:
         5. 返回最终回复
         """
         # 1. 添加用户消息
-        self.messages.append(Message(role="user", content=user_input))
+        self.context.add_message(Message(role="user", content=user_input))
         logger.info("[引擎] 用户输入: %s", user_input[:50])
 
         # 2. 工具调用循环（最多 20 轮）
@@ -149,7 +150,7 @@ class ChatEngine:
 
             try:
                 async for event in self.provider.stream_chat(
-                    messages=self.messages,
+                    messages=self.context.get_messages(),
                     tools=get_tool_definitions(format="claude"),
                     model=None,  # 使用默认模型
                     temperature=0.7,
@@ -191,7 +192,7 @@ class ChatEngine:
                 return
 
             # 3. 添加 assistant 消息到历史
-            self.messages.append(
+            self.context.add_message(
                 Message(
                     role="assistant",
                     content=accumulated_text,
@@ -232,7 +233,7 @@ class ChatEngine:
                     logger.error("[引擎] 工具执行失败: %s - %s", tool_name, e)
 
                 # 添加工具结果到历史
-                self.messages.append(
+                self.context.add_message(
                     Message(
                         role="tool",
                         content=tool_result,
@@ -298,7 +299,7 @@ class ChatEngine:
 [费用汇总]
 - 累计费用：${total_cost:.6f}
 - Provider：{self.provider.provider_name}
-- 对话轮次：{len([m for m in self.messages if m.role == 'user'])}
+- 对话轮次：{len([m for m in self.context.messages if m.role == 'user'])}
 """
             return summary.strip()
 
@@ -314,16 +315,38 @@ class ChatEngine:
         ----
         str : 清空结果消息
         """
-        # 保留第一条 system 消息
-        system_msg = self.messages[0] if self.messages and self.messages[0].role == "system" else None
-
-        self.messages.clear()
-
-        if system_msg:
-            self.messages.append(system_msg)
-
+        self.context.clear()
         logger.info("[引擎] 对话历史已清空")
         return "[成功] 对话历史已清空"
+
+    def compact_context(self) -> str:
+        """压缩上下文（保留最近 10 条消息）。
+
+        返回
+        ----
+        str : 压缩结果消息
+        """
+        result = self.context.compact()
+        logger.info("[引擎] 上下文已压缩")
+        return result
+
+    def get_context_stats(self) -> str:
+        """获取上下文统计信息。
+
+        返回
+        ----
+        str : 统计信息
+        """
+        stats = self.context.get_stats()
+
+        summary = f"""
+[上下文统计]
+- 消息数量：{stats['message_count']}
+- 估算 Token：{stats['estimated_tokens']}
+- 上下文上限：{stats['max_tokens']}
+- 使用率：{stats['usage_percent']:.1f}%
+"""
+        return summary.strip()
 
     async def _record_token_usage(self, usage, model: str) -> None:
         """记录 token 用量到数据库。

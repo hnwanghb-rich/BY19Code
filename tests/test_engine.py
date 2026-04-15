@@ -75,9 +75,9 @@ class TestChatEngineInit:
         assert engine.config == test_config
         assert engine.project_root == temp_project.resolve()
         assert engine.provider == mock_provider
-        assert len(engine.messages) == 1  # System prompt
-        assert engine.messages[0].role == "system"
-        assert "Windows" in engine.messages[0].content
+        assert len(engine.context.get_messages()) == 1  # System prompt
+        assert engine.context.get_messages()[0].role == "system"
+        assert "Windows" in engine.context.get_messages()[0].content
 
     @patch("by19code.core.engine.LLMFactory.create")
     def test_system_prompt_contains_project_path(self, mock_create, temp_project, test_config):
@@ -87,7 +87,7 @@ class TestChatEngineInit:
 
         engine = ChatEngine(test_config, temp_project)
 
-        system_content = engine.messages[0].content
+        system_content = engine.context.get_messages()[0].content
         assert str(temp_project.resolve()) in system_content
 
 
@@ -139,10 +139,10 @@ class TestChatSimple:
         assert len(text_events) == 2
 
         # 验证消息历史
-        assert len(engine.messages) == 3  # system + user + assistant
-        assert engine.messages[1].role == "user"
-        assert engine.messages[1].content == "Hello"
-        assert engine.messages[2].role == "assistant"
+        assert len(engine.context.get_messages()) == 3  # system + user + assistant
+        assert engine.context.messages[0].role == "user"
+        assert engine.context.messages[0].content == "Hello"
+        assert engine.context.messages[1].role == "assistant"
 
 
 class TestChatWithTools:
@@ -226,9 +226,9 @@ class TestChatWithTools:
 
         # 验证消息历史
         # system + user + assistant(tool_call) + tool + assistant(final)
-        assert len(engine.messages) == 5
-        assert engine.messages[2].tool_calls is not None
-        assert engine.messages[3].role == "tool"
+        assert len(engine.context.get_messages()) == 5
+        assert engine.context.messages[1].tool_calls is not None
+        assert engine.context.messages[2].role == "tool"
 
 
 class TestToolCallLoop:
@@ -356,17 +356,17 @@ class TestClearHistory:
         engine = ChatEngine(test_config, temp_project)
 
         # 添加一些消息
-        engine.messages.append(Message(role="user", content="test1"))
-        engine.messages.append(Message(role="assistant", content="response1"))
+        engine.context.add_message(Message(role="user", content="test1"))
+        engine.context.add_message(Message(role="assistant", content="response1"))
 
-        assert len(engine.messages) == 3  # system + user + assistant
+        assert len(engine.context.get_messages()) == 3  # system + user + assistant
 
         # 清空历史
         result = engine.clear_history()
 
         assert "[成功]" in result
-        assert len(engine.messages) == 1  # 只保留 system
-        assert engine.messages[0].role == "system"
+        assert len(engine.context.get_messages()) == 1  # 只保留 system
+        assert engine.context.get_messages()[0].role == "system"
 
 
 if __name__ == "__main__":
