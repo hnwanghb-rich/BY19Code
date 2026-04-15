@@ -5,7 +5,10 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(python:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(git remote *)",
+      "Bash(git stash *)",
+      "Bash(ls -la *.py *.bat *.json)"
     ]
   }
 }
