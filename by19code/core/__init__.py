@@ -18,6 +18,7 @@ from by19code.core.tools import (
     get_tool_definitions,
     get_tool_by_name,
 )
+from by19code.core.engine import ChatEngine
 
 __all__ = [
     # 命令沙箱
@@ -33,7 +34,8 @@ __all__ = [
     "execute_tool",
     "get_tool_definitions",
     "get_tool_by_name",
+    # 对话引擎
+    "ChatEngine",
 ]
 
-# TODO: T11 实现对话引擎
 # TODO: T12 实现上下文管理器
