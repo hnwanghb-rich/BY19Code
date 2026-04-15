@@ -218,6 +218,17 @@ def load_config(
           ← overrides 参数
             ← 环境变量 BY19CODE_{PROVIDER}_API_KEY（仅填充 api_key 空值）
     """
+    # 加载 .env 文件（如果存在）
+    try:
+        from dotenv import load_dotenv
+        if project_dir:
+            env_file = Path(project_dir) / ".env"
+            if env_file.exists():
+                load_dotenv(env_file)
+                logger.debug("[配置] 已加载 .env 文件: %s", env_file)
+    except ImportError:
+        logger.debug("[配置] python-dotenv 未安装，跳过 .env 文件加载")
+
     # 第一层：全局配置文件
     global_dir = _expand_path(r"%USERPROFILE%\.by19code")
     merged: dict[str, Any] = _load_json_file(global_dir / "config.json")

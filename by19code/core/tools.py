@@ -316,8 +316,62 @@ async def execute_tool(
                 return f"[错误] 执行命令失败: {e}"
 
         # ===== Git 操作工具（T14 实现）=====
-        elif tool_name in ["git_commit", "git_diff", "git_log", "git_status", "git_create_branch"]:
-            return f"[提示] {tool_name} 工具尚未实现，将在 T14 完成。"
+        elif tool_name == "git_commit":
+            message = arguments.get("message")
+
+            if not message:
+                return "[错误] 缺少必需参数: message"
+
+            try:
+                from by19code.git_ops import git_commit
+                result = git_commit(message, project_root)
+                logger.info("[工具] git_commit 成功: %s", message)
+                return result
+            except Exception as e:
+                return f"[错误] Git 提交失败: {e}"
+
+        elif tool_name == "git_diff":
+            try:
+                from by19code.git_ops import git_diff
+                result = git_diff(project_root)
+                logger.info("[工具] git_diff 成功")
+                return result
+            except Exception as e:
+                return f"[错误] 获取 Git diff 失败: {e}"
+
+        elif tool_name == "git_log":
+            count = arguments.get("count", 10)
+
+            try:
+                from by19code.git_ops import git_log
+                result = git_log(count, project_root)
+                logger.info("[工具] git_log 成功: 显示 %d 条", count)
+                return result
+            except Exception as e:
+                return f"[错误] 获取 Git log 失败: {e}"
+
+        elif tool_name == "git_status":
+            try:
+                from by19code.git_ops import git_status
+                result = git_status(project_root)
+                logger.info("[工具] git_status 成功")
+                return result
+            except Exception as e:
+                return f"[错误] 获取 Git status 失败: {e}"
+
+        elif tool_name == "git_create_branch":
+            branch_name = arguments.get("branch_name")
+
+            if not branch_name:
+                return "[错误] 缺少必需参数: branch_name"
+
+            try:
+                from by19code.git_ops import git_create_branch
+                result = git_create_branch(branch_name, project_root)
+                logger.info("[工具] git_create_branch 成功: %s", branch_name)
+                return result
+            except Exception as e:
+                return f"[错误] 创建 Git 分支失败: {e}"
 
         # ===== 未知工具 =====
         else:

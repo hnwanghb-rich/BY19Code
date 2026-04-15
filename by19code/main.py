@@ -82,6 +82,11 @@ def main(config: str | None, project: str):
         app = CLIApp(app_config, project_root)
         asyncio.run(app.run())
 
+        # 正常退出
+        logger.info("[主程序] 程序正常退出")
+        print("\n再见！")
+        sys.exit(0)
+
     except KeyboardInterrupt:
         print("\n再见！")
         sys.exit(0)

@@ -45,34 +45,56 @@ class CLIApp:
         # 显示欢迎信息
         self.renderer.render_welcome()
 
-        while True:
-            try:
-                # 读取用户输入
-                user_input = self.renderer.render_prompt()
+        try:
+            while True:
+                try:
+                    # 读取用户输入
+                    user_input = self.renderer.render_prompt()
 
-                # 跳过空输入
-                if not user_input.strip():
+                    # 跳过空输入
+                    if not user_input.strip():
+                        continue
+
+                    # 处理命令或对话
+                    if user_input.startswith("/"):
+                        await self._handle_command(user_input)
+                    else:
+                        await self._handle_chat(user_input)
+
+                except KeyboardInterrupt:
+                    # Ctrl+C 中断
+                    self.renderer.print_warning("\n已中断")
                     continue
 
-                # 处理命令或对话
-                if user_input.startswith("/"):
-                    await self._handle_command(user_input)
-                else:
-                    await self._handle_chat(user_input)
+                except EOFError:
+                    # Ctrl+D 或 /exit 退出
+                    break
 
-            except KeyboardInterrupt:
-                # Ctrl+C 中断
-                self.renderer.print_warning("\n已中断")
-                continue
+                except Exception as e:
+                    # 未预期的异常
+                    logger.error("[CLI] 未预期的异常: %s", e, exc_info=True)
+                    self.renderer.print_error(f"\n[错误] 发生未预期的异常: {e}")
 
-            except EOFError:
-                # Ctrl+D 或 /exit 退出
-                break
-
+        finally:
+            # 清理资源
+            logger.info("[CLI] 清理资源...")
+            try:
+                # 关闭数据库连接
+                from by19code.db.database import close_db
+                await close_db()
+                logger.info("[CLI] 数据库连接已关闭")
             except Exception as e:
-                # 未预期的异常
-                logger.error("[CLI] 未预期的异常: %s", e, exc_info=True)
-                self.renderer.print_error(f"\n[错误] 发生未预期的异常: {e}")
+                logger.warning("[CLI] 关闭数据库时出错: %s", e)
+
+            try:
+                # 关闭 HTTP 客户端
+                if hasattr(self.engine.provider, '_client'):
+                    client = self.engine.provider._client
+                    if hasattr(client, 'close'):
+                        await client.close()
+                        logger.info("[CLI] HTTP 客户端已关闭")
+            except Exception as e:
+                logger.warning("[CLI] 关闭 HTTP 客户端时出错: %s", e)
 
     async def _handle_command(self, command: str) -> None:
         """处理斜杠命令。
@@ -116,6 +138,16 @@ class CLIApp:
                 result = await self.engine.switch_model(args)
                 self.renderer.print_success(result)
 
+            elif cmd == "/model":
+                # 列出所有可用模型或切换模型
+                if not args:
+                    # 列出所有可用模型
+                    self._list_models()
+                else:
+                    # 切换到指定模型
+                    result = await self.engine.switch_model(args)
+                    self.renderer.print_success(result)
+
             elif cmd in ["/exit", "/quit"]:
                 self.renderer.print_warning("再见！")
                 raise EOFError
@@ -124,9 +156,36 @@ class CLIApp:
                 self.renderer.print_error(f"[错误] 未知命令: {cmd}")
                 self.renderer.print_info("输入 /help 查看可用命令")
 
+        except EOFError:
+            # 重新抛出 EOFError，让外层处理退出
+            raise
         except Exception as e:
             logger.error("[CLI] 命令执行失败: %s - %s", cmd, e)
             self.renderer.print_error(f"[错误] 命令执行失败: {e}")
+
+    def _list_models(self) -> None:
+        """列出所有可用的模型。"""
+        current_provider = self.config.active_provider
+
+        self.renderer.print_info("\n[可用模型]")
+        for provider in self.config.llm_providers:
+            # 标记当前使用的模型
+            marker = "[cyan]*[/cyan] " if provider.name == current_provider else "  "
+
+            # 检查 API Key 是否配置
+            has_key = provider.api_key and provider.api_key != f"${{BY19CODE_{provider.name.upper()}_API_KEY}}"
+            key_status = "[green][OK][/green]" if has_key else "[red][NO][/red]"
+
+            self.renderer.console.print(
+                f"{marker}[bold]{provider.name}[/bold] - {provider.display_name} {key_status}"
+            )
+            self.renderer.console.print(
+                f"    模型: {provider.model} | "
+                f"费用: {provider.cost_per_1k_input:.2f}/{provider.cost_per_1k_output:.2f} 元/1K tokens"
+            )
+
+        self.renderer.print_info("\n使用 [cyan]/model <名称>[/cyan] 切换模型")
+        self.renderer.print_info("例如: /model kimi")
 
     async def _handle_chat(self, user_input: str) -> None:
         """处理普通对话。

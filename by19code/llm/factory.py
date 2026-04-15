@@ -10,6 +10,9 @@
 ----------------------------------
   "claude"   → ClaudeProvider
   "deepseek" → OpenAICompatibleProvider
+  "kimi"     → OpenAICompatibleProvider
+  "doubao"   → OpenAICompatibleProvider
+  "glm"      → OpenAICompatibleProvider
 
 扩展方式
 --------
@@ -221,5 +224,11 @@ def switch_provider(name: str, config: AppConfig) -> LLMProvider:
 from by19code.llm.claude_provider import ClaudeProvider  # noqa: E402
 from by19code.llm.openai_provider import OpenAICompatibleProvider  # noqa: E402
 
+# 注册 Anthropic Provider
 LLMFactory.register("claude", ClaudeProvider)
+
+# 注册 OpenAI 兼容 Provider（所有使用 OpenAI API 格式的模型）
 LLMFactory.register("deepseek", OpenAICompatibleProvider)
+LLMFactory.register("kimi", OpenAICompatibleProvider)
+LLMFactory.register("doubao", OpenAICompatibleProvider)
+LLMFactory.register("glm", OpenAICompatibleProvider)

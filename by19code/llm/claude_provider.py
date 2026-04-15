@@ -101,6 +101,7 @@ class ClaudeProvider(LLMProvider):
 
         client_kwargs: dict[str, Any] = {
             "api_key": api_key,
+            "timeout": 60.0,  # 设置 60 秒超时，避免流式响应挂起
             "default_headers": {
                 "anthropic-version": "2023-06-01",
                 "User-Agent": "BY19Code/0.1.0 (Windows; Python/3.12)",

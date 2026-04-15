@@ -112,7 +112,11 @@ class OpenAICompatibleProvider(LLMProvider):
                 "openai SDK 未安装，请运行: pip install openai"
             ) from exc
 
-        kwargs: dict[str, Any] = {"api_key": api_key}
+        kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "timeout": 60.0,  # 设置 60 秒超时，避免流式响应挂起
+            "max_retries": 0,  # 禁用自动重试，避免卡住
+        }
         if base_url:
             kwargs["base_url"] = base_url
 
@@ -452,7 +456,10 @@ class OpenAICompatibleProvider(LLMProvider):
         try:
             stream = await self._client.chat.completions.create(**kwargs)
 
+            logger.debug("[%s] 开始接收流式响应", self.provider_name)
+
             async for chunk in stream:
+                logger.debug("[%s] 收到 chunk: choices=%d", self.provider_name, len(chunk.choices) if chunk.choices else 0)
                 # ----------------------------------------------------------
                 # usage chunk：choices=[]，携带最终 token 用量
                 # OpenAI 在 stream_options.include_usage=True 时最后发一条

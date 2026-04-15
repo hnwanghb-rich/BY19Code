@@ -41,6 +41,8 @@ class Renderer:
         if event.event_type == "text_delta":
             # 流式打印文本（无换行）
             self.console.print(event.data, end="")
+            # 强制刷新输出缓冲区（Windows 兼容）
+            sys.stdout.flush()
 
         elif event.event_type == "tool_call_start":
             # 显示工具调用开始
@@ -75,11 +77,12 @@ class Renderer:
             "[bold cyan]BY19Code v0.1.0[/bold cyan] - AI 编程助手\n\n"
             "[bold]命令列表：[/bold]\n"
             "  [cyan]/help[/cyan]     - 显示此帮助\n"
+            "  [cyan]/model[/cyan]    - 列出所有可用模型\n"
+            "  [cyan]/model[/cyan] <名称> - 切换到指定模型（如：/model kimi）\n"
             "  [cyan]/clear[/cyan]    - 清空对话历史\n"
             "  [cyan]/compact[/cyan]  - 压缩上下文（保留最近 10 条消息）\n"
             "  [cyan]/stats[/cyan]    - 查看上下文统计\n"
             "  [cyan]/cost[/cyan]     - 查看费用汇总\n"
-            "  [cyan]/switch[/cyan] <provider> - 切换模型（claude/deepseek）\n"
             "  [cyan]/exit[/cyan]     - 退出程序\n\n"
             "[dim]直接输入文本开始对话。按 Ctrl+C 可随时中断。[/dim]"
         )
