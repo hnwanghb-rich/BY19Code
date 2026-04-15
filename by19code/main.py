@@ -57,8 +57,18 @@ def main(config: str | None, project: str):
             logger.info("[主程序] 已设置 Windows 事件循环策略")
 
         # 加载配置
-        logger.info("[主程序] 加载配置: config_path=%s", config)
-        app_config = load_config(config_path=config)
+        logger.info("[主程序] 加载配置: config=%s, project=%s", config, project)
+
+        # 如果指定了配置文件，需要特殊处理
+        if config:
+            # TODO: 支持自定义配置文件路径
+            logger.warning("[主程序] --config 参数暂不支持，将使用默认配置")
+
+        # 解析项目根目录
+        project_root = Path(project).resolve()
+
+        # 加载配置（从项目目录或全局配置）
+        app_config = load_config(project_dir=project_root)
         logger.info("[主程序] 配置加载完成: active_provider=%s", app_config.active_provider)
 
         # 初始化数据库
@@ -66,8 +76,6 @@ def main(config: str | None, project: str):
         asyncio.run(init_db(app_config.database.path))
         logger.info("[主程序] 数据库初始化完成")
 
-        # 解析项目根目录
-        project_root = Path(project).resolve()
         logger.info("[主程序] 项目根目录: %s", project_root)
 
         # 创建并运行 CLI 应用
