@@ -1,0 +1,94 @@
+============================================================
+  BY19Code 验收节点 A：能说话
+  测试范围：T01-T07（脚手架 → LLM 适配层）
+  执行时间：2026-04-14 18:53:31
+============================================================
+
+[配置] Claude API Key: sk-2xKlk...
+[配置] Claude Base URL: https://hone.vvvv.ee
+[配置] DeepSeek API Key: sk-2a5af...
+[配置] DeepSeek Base URL: https://api.deepseek.com
+
+【测试 T01】项目脚手架
+----------------------------------------
+  [通过] 目录存在 — by19code
+  [通过] 目录存在 — by19code/cli
+  [通过] 目录存在 — by19code/core
+  [通过] 目录存在 — by19code/llm
+  [通过] 目录存在 — by19code/file_ops
+  [通过] 目录存在 — by19code/git_ops
+  [通过] 目录存在 — by19code/db
+  [通过] 目录存在 — by19code/config
+  [通过] 目录存在 — docs
+  [通过] 目录存在 — tests
+  [通过] 文件存在 — pyproject.toml
+  [通过] 文件存在 — .gitignore
+  [通过] 文件存在 — .env.example
+  [通过] 文件存在 — CLAUDE.md
+  [通过] 文件存在 — by19code/__init__.py
+  [通过] 文件存在 — by19code/llm/__init__.py
+  [通过] 文件存在 — by19code/config/__init__.py
+  [通过] 文件存在 — by19code/db/__init__.py
+  [通过] 依赖声明 — click
+  [通过] 依赖声明 — rich
+  [通过] 依赖声明 — anthropic
+  [通过] 依赖声明 — openai
+  [通过] 依赖声明 — aiosqlite
+  [通过] 依赖声明 — pydantic
+
+【测试 T02】配置管理
+----------------------------------------
+  [通过] LLMProviderConfig 创建 — Pydantic 模型正常
+  [通过] AppConfig 创建 — 配置模型正常
+  [通过] get_provider 方法 — 查询成功
+
+【测试 T03】SQLite token_usage 记录
+----------------------------------------
+  [通过] 数据库初始化 — 路径：C:\Users\Administrator\.by19code\by19code.db
+  [通过] token_usage 记录写入 — 新增 1 条，总计 8 条
+  [通过] token_usage 记录内容 — 字段完整
+
+【测试 T04】LLM 适配层基类
+----------------------------------------
+  [通过] Message 模型 — 创建和访问正常
+  [通过] TokenUsage 模型 — total_tokens 计算正确
+  [通过] ToolCall 模型 — 创建正常
+  [通过] LLMResponse 模型 — 创建正常
+  [通过] StreamEvent 模型 — 创建正常
+  [通过] ToolDefinition 模型 — 创建正常
+  [通过] LLMError 异常 — 基类创建正常
+  [通过] LLM 异常子类 — 所有异常类创建正常
+  [通过] LLMProvider 基类 — 抽象基类定义正常
+
+【测试 T05】Claude 流式回复
+----------------------------------------
+  [通过] Claude API Key 检查 — Key 以 sk-2xKlk... 开头
+  [通过] Claude Provider 创建 — provider_name=claude
+  [通过] Claude 流式文本输出 — 收到 32 个字符
+  [通过] Claude 流式事件类型 — 事件类型：{'done', 'text_delta', 'usage'}
+  [通过] Claude Token 用量返回 — tokens=209
+
+【测试 T06】DeepSeek 切换与回复
+----------------------------------------
+  [通过] DeepSeek API Key 检查 — Key 以 sk-2a5af... 开头
+  [通过] DeepSeek Provider 创建 — provider_name=deepseek
+  [通过] DeepSeek 流式回复 — 收到 28 个字符
+
+【测试 T07】Provider 工厂
+----------------------------------------
+  [通过] list_providers — 已注册 2 个 Provider: claude, deepseek
+  [通过] LLMFactory.create — 成功创建 claude Provider
+  [通过] switch_provider — 成功切换到 deepseek
+  [通过] 未注册 Provider 异常 — 正确抛出异常
+
+【测试 T05/T06】费用计算
+----------------------------------------
+  [通过] Claude 费用计算 — $0.010500（预期 $0.010500）
+  [通过] DeepSeek 费用计算 — $0.002800（预期 $0.002800）
+
+============================================================
+  验收节点 A 测试结果：53/53 通过
+============================================================
+
+  全部通过！可以继续 T08。
+============================================================
