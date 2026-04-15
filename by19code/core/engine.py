@@ -32,7 +32,7 @@ from by19code.llm.base import (
     ToolCall,
 )
 from by19code.llm.factory import LLMFactory
-from by19code.core.tools import execute_tool, get_tool_definitions
+from by19code.core.tools import execute_tool, TOOL_DEFINITIONS
 from by19code.core.context import ContextManager
 from by19code.db.database import get_db
 from by19code.db.models import add_token_usage
@@ -151,7 +151,7 @@ class ChatEngine:
             try:
                 async for event in self.provider.stream_chat(
                     messages=self.context.get_messages(),
-                    tools=get_tool_definitions(format="claude"),
+                    tools=TOOL_DEFINITIONS,  # 直接传入 ToolDefinition 列表
                     model=None,  # 使用默认模型
                     temperature=0.7,
                     max_tokens=8192,
