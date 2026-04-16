@@ -214,10 +214,11 @@ def load_config(
     加载顺序
     --------
     内置默认值
-      ← 全局配置 %USERPROFILE%\\.by19code\\config.json
-        ← 项目配置 <project_dir>\\config.json
-          ← overrides 参数
-            ← 环境变量 BY19CODE_{PROVIDER}_API_KEY（仅填充 api_key 空值）
+      ← BY19Code 安装目录的 config.json（如果存在）
+        ← 全局配置 %USERPROFILE%\\.by19code\\config.json
+          ← 项目配置 <project_dir>\\config.json
+            ← overrides 参数
+              ← 环境变量 BY19CODE_{PROVIDER}_API_KEY（仅填充 api_key 空值）
     """
     # 加载 .env 文件（如果存在）
     try:
@@ -230,21 +231,31 @@ def load_config(
     except ImportError:
         logger.debug("[配置] python-dotenv 未安装，跳过 .env 文件加载")
 
-    # 第一层：全局配置文件
-    global_dir = _expand_path(r"%USERPROFILE%\.by19code")
-    merged: dict[str, Any] = _load_json_file(global_dir / "config.json")
+    # 第一层：BY19Code 安装目录的默认配置
+    by19code_root = Path(__file__).parent.parent.parent  # by19code/config/settings.py -> BY19Code/
+    merged: dict[str, Any] = _load_json_file(by19code_root / "config.json")
 
-    # 第二层：项目配置文件（覆盖全局）
+    # 如果没有找到，尝试 config.example.json
+    if not merged:
+        merged = _load_json_file(by19code_root / "config.example.json")
+
+    # 第二层：全局配置文件
+    global_dir = _expand_path(r"%USERPROFILE%\.by19code")
+    global_config = _load_json_file(global_dir / "config.json")
+    if global_config:
+        merged = _deep_merge(merged, global_config)
+
+    # 第三层：项目配置文件（覆盖全局）
     if project_dir is not None:
         project_data = _load_json_file(Path(project_dir) / "config.json")
         if project_data:
             merged = _deep_merge(merged, project_data)
 
-    # 第三层：命令行参数覆盖（最高优先级）
+    # 第四层：命令行参数覆盖（最高优先级）
     if overrides:
         merged = _deep_merge(merged, overrides)
 
-    # 第四层：环境变量注入 API Key（配置文件格式错误时 providers 可能不是 list）
+    # 第五层：环境变量注入 API Key（配置文件格式错误时 providers 可能不是 list）
     providers_raw_any = merged.get("llm_providers", [])
     providers_raw: list[dict[str, Any]] = (
         providers_raw_any if isinstance(providers_raw_any, list) else []
@@ -257,6 +268,16 @@ def load_config(
     except Exception as e:
         logger.error("[配置] 配置解析失败，使用默认值: %s", e)
         config = AppConfig()
+
+    # 如果没有任何 provider 配置，给出友好提示
+    if not config.llm_providers:
+        logger.warning("[配置] 未找到任何 LLM Provider 配置")
+        logger.warning("[配置] 请在以下位置之一创建 config.json：")
+        logger.warning("[配置]   1. %s", by19code_root / "config.json")
+        logger.warning("[配置]   2. %s", global_dir / "config.json")
+        if project_dir:
+            logger.warning("[配置]   3. %s", project_dir / "config.json")
+        logger.warning("[配置] 或参考 config.example.json 创建配置文件")
 
     # 对模型实例再次注入（providers 来自默认值时 providers_raw 为空）
     for provider in config.llm_providers:
