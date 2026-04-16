@@ -81,6 +81,7 @@ class SafetyConfig(BaseModel):
 
     command_timeout_seconds: int = 30
     max_tool_rounds: int = 20
+    change_model_time: int = 60  # 模型无响应超时时间（秒），超时后自动切换模型
     blocked_commands: list[str] = Field(
         default_factory=lambda: _DEFAULT_BLOCKED_COMMANDS.copy()
     )

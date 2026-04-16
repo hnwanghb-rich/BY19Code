@@ -11,6 +11,8 @@ from typing import Any
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
+from rich.spinner import Spinner
+from rich.live import Live
 
 from by19code.llm.base import StreamEvent
 
@@ -30,6 +32,7 @@ class Renderer:
         """初始化渲染器。"""
         # force_terminal=True 确保在管道中也能正常渲染
         self.console = Console(force_terminal=True)
+        self._spinner_live = None
 
     def render_stream(self, event: StreamEvent) -> None:
         """渲染流式事件。
@@ -133,3 +136,21 @@ class Renderer:
         message : 消息内容
         """
         self.console.print(f"[yellow]{message}[/yellow]")
+
+    def start_spinner(self, text: str = "处理中") -> None:
+        """启动等待动画。
+
+        参数
+        ----
+        text : 显示的文本
+        """
+        if self._spinner_live is None:
+            spinner = Spinner("dots", text=f"[cyan]{text}...[/cyan]")
+            self._spinner_live = Live(spinner, console=self.console, refresh_per_second=10)
+            self._spinner_live.start()
+
+    def stop_spinner(self) -> None:
+        """停止等待动画。"""
+        if self._spinner_live is not None:
+            self._spinner_live.stop()
+            self._spinner_live = None

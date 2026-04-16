@@ -398,6 +398,110 @@ $env:BY19CODE_DEEPSEEK_API_KEY = "sk-xxx"
 
 ---
 
+## 5. 用户体验增强功能
+
+### 5.1 交互式模型选择
+
+**功能描述**：使用 `/model` 命令时，显示交互式下拉列表，用户通过数字选择模型，无需手动输入模型名称。
+
+**实现方式**：
+- 使用 `rich.prompt.Prompt` 的 `choices` 参数实现数字选择
+- 显示模型编号、名称、API Key 状态、费用信息
+- 标记当前使用的模型（带 * 标识）
+
+**用户交互流程**：
+```
+> /model
+
+[可用模型]
+  1. claude - Claude (Anthropic) [OK]
+    模型: claude-sonnet-4-20250514 | 费用: 3.00/15.00 元/1K tokens
+* 2. deepseek - DeepSeek [OK]
+    模型: deepseek-chat | 费用: 0.14/0.28 元/1K tokens
+  3. openai - OpenAI GPT-4o [OK]
+    模型: gpt-4o | 费用: 2.50/10.00 元/1K tokens
+
+请选择模型编号: 3
+[成功] 已切换到 openai
+```
+
+**代码位置**：`by19code/cli/app.py` - `_select_and_switch_model()` 方法
+
+---
+
+### 5.2 等待处理动画
+
+**功能描述**：在等待 LLM 响应时显示动画标识（如 `处理中...`），提供视觉反馈，避免用户误以为程序卡死。
+
+**实现方式**：
+- 使用 `rich.spinner.Spinner` 和 `rich.live.Live` 实现动画效果
+- 在发起 LLM 请求前启动 spinner
+- 收到第一个响应事件后停止 spinner
+
+**动画样式**：
+```
+[cyan]处理中...[/cyan]  (带旋转点动画)
+```
+
+**代码位置**：
+- `by19code/cli/renderer.py` - `start_spinner()` / `stop_spinner()` 方法
+- `by19code/cli/app.py` - 在 `_handle_chat()` 中调用
+
+---
+
+### 5.3 模型超时自动切换
+
+**功能描述**：当模型响应超过指定时间（默认 60 秒）无输出时，自动切换到下一个可用模型并重试当前请求。
+
+**配置参数**：
+- 配置项：`safety.change_model_time`
+- 默认值：60 秒
+- 可在 `config.json` 中修改
+
+**切换逻辑**：
+1. 检测模型响应超时（超过 `change_model_time` 秒无事件）
+2. 自动切换到下一个配置了 API Key 的可用模型
+3. 使用相同的用户输入重新发起请求
+4. 如果只有一个可用模型，则不切换，返回超时错误
+
+**配置示例**：
+```json
+{
+  "safety": {
+    "command_timeout_seconds": 30,
+    "max_tool_rounds": 20,
+    "change_model_time": 60,
+    "blocked_commands": [...]
+  }
+}
+```
+
+**实现细节**：
+- 在 `ChatEngine` 中维护 `_last_event_time` 时间戳
+- 每次收到事件时更新时间戳
+- 在流式响应过程中检测超时
+- 超时后调用 `_get_next_available_provider()` 获取下一个模型
+- 自动切换并重试
+
+**代码位置**：
+- `by19code/config/settings.py` - `SafetyConfig.change_model_time`
+- `by19code/core/engine.py` - 超时检测和切换逻辑
+- `by19code/core/engine.py` - `_get_next_available_provider()` 方法
+
+**用户体验**：
+```
+> 帮我分析这段代码
+
+处理中...
+
+[警告] 模型 deepseek 响应超时（60秒），自动切换到 openai
+处理中...
+
+[AI 响应内容...]
+```
+
+---
+
 ## 5 – 8 核心开发规则、验收标准、迭代规划、风险
 
 （与上一版一致，验收标准中的路径穿越测试使用 `C:\Windows\System32\config\SAM` 替代 `/etc/passwd`，终极验收路径使用 `D:\Projects\test-calc`。）

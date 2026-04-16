@@ -141,8 +141,8 @@ class CLIApp:
             elif cmd == "/model":
                 # 列出所有可用模型或切换模型
                 if not args:
-                    # 列出所有可用模型
-                    self._list_models()
+                    # 显示交互式选择菜单
+                    await self._select_and_switch_model()
                 else:
                     # 切换到指定模型
                     result = await self.engine.switch_model(args)
@@ -163,12 +163,18 @@ class CLIApp:
             logger.error("[CLI] 命令执行失败: %s - %s", cmd, e)
             self.renderer.print_error(f"[错误] 命令执行失败: {e}")
 
-    def _list_models(self) -> None:
-        """列出所有可用的模型。"""
+    async def _select_and_switch_model(self) -> None:
+        """显示交互式模型选择菜单并切换。"""
+        from rich.prompt import Prompt
+
         current_provider = self.config.active_provider
 
+        # 构建选择列表
         self.renderer.print_info("\n[可用模型]")
-        for provider in self.config.llm_providers:
+        choices = []
+        choice_map = {}
+
+        for idx, provider in enumerate(self.config.llm_providers, 1):
             # 标记当前使用的模型
             marker = "[cyan]*[/cyan] " if provider.name == current_provider else "  "
 
@@ -177,15 +183,33 @@ class CLIApp:
             key_status = "[green][OK][/green]" if has_key else "[red][NO][/red]"
 
             self.renderer.console.print(
-                f"{marker}[bold]{provider.name}[/bold] - {provider.display_name} {key_status}"
+                f"{marker}[bold]{idx}.[/bold] [bold]{provider.name}[/bold] - {provider.display_name} {key_status}"
             )
             self.renderer.console.print(
                 f"    模型: {provider.model} | "
                 f"费用: {provider.cost_per_1k_input:.2f}/{provider.cost_per_1k_output:.2f} 元/1K tokens"
             )
 
-        self.renderer.print_info("\n使用 [cyan]/model <名称>[/cyan] 切换模型")
-        self.renderer.print_info("例如: /model kimi")
+            choices.append(str(idx))
+            choice_map[str(idx)] = provider.name
+
+        # 提示用户选择
+        self.renderer.console.print()
+        choice = Prompt.ask(
+            "[bold green]请选择模型编号[/bold green]",
+            choices=choices,
+            default=None,
+            show_choices=False
+        )
+
+        # 切换模型
+        if choice in choice_map:
+            selected_name = choice_map[choice]
+            if selected_name == current_provider:
+                self.renderer.print_info(f"[信息] 已经在使用 {selected_name}")
+            else:
+                result = await self.engine.switch_model(selected_name)
+                self.renderer.print_success(result)
 
     async def _handle_chat(self, user_input: str) -> None:
         """处理普通对话。

@@ -6,6 +6,7 @@
 3. 执行工具调用
 4. 记录 token 用量
 5. 处理异常
+6. 超时自动切换模型
 
 工具调用循环
 ------------
@@ -13,10 +14,18 @@
 2. 如果包含工具调用 → 执行工具 → 将结果返回给 LLM
 3. 重复步骤 2，直到 LLM 不再调用工具
 4. 返回最终回复给用户
+
+超时切换机制
+------------
+1. 如果模型响应超过 change_model_time 秒无输出
+2. 自动切换到下一个可用模型
+3. 使用相同的输入重试
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import AsyncGenerator, Optional
 from collections.abc import AsyncIterator
@@ -74,6 +83,10 @@ class ChatEngine:
         # 上下文管理器（T12）
         self.context = ContextManager(max_tokens=100000)
 
+        # 超时切换相关
+        self._last_event_time = time.time()
+        self._timeout_threshold = config.safety.change_model_time
+
         # 初始化 System Prompt
         self._init_system_prompt()
 
@@ -108,6 +121,32 @@ class ChatEngine:
 
         self.context.add_message(Message(role="system", content=system_content))
         logger.debug("[引擎] System Prompt 已初始化")
+
+    def _get_next_available_provider(self) -> str | None:
+        """获取下一个可用的模型。
+
+        返回
+        ----
+        str | None : 下一个可用模型名称，如果没有则返回 None
+        """
+        current_idx = -1
+        available_providers = []
+
+        for idx, provider in enumerate(self.config.llm_providers):
+            # 检查是否有 API Key
+            has_key = provider.api_key and provider.api_key != f"${{BY19CODE_{provider.name.upper()}_API_KEY}}"
+            if has_key:
+                available_providers.append(provider.name)
+                if provider.name == self.config.active_provider:
+                    current_idx = len(available_providers) - 1
+
+        # 如果只有一个可用模型，返回 None
+        if len(available_providers) <= 1:
+            return None
+
+        # 返回下一个模型（循环）
+        next_idx = (current_idx + 1) % len(available_providers)
+        return available_providers[next_idx]
 
     async def chat(self, user_input: str) -> AsyncGenerator[StreamEvent, None]:
         """处理用户输入并生成回复（流式）。
@@ -148,6 +187,10 @@ class ChatEngine:
             tool_calls: list[ToolCall] = []
             final_event: Optional[StreamEvent] = None
 
+            # 重置超时计时器
+            self._last_event_time = time.time()
+            has_received_event = False
+
             try:
                 async for event in self.provider.stream_chat(
                     messages=self.context.get_messages(),
@@ -156,6 +199,10 @@ class ChatEngine:
                     temperature=0.7,
                     max_tokens=8192,
                 ):
+                    # 更新最后事件时间
+                    self._last_event_time = time.time()
+                    has_received_event = True
+
                     # 转发事件给调用方
                     yield event
 

@@ -50,6 +50,7 @@
   "safety": {
     "command_timeout_seconds": 30,
     "max_tool_rounds": 20,
+    "change_model_time": 60,
     "blocked_commands": [
       "format",
       "shutdown",
