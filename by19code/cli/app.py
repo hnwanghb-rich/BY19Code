@@ -204,7 +204,7 @@ class CLIApp:
             )
 
             choices.append(str(idx))
-            choice_map[str(idx)] = provider.name
+            choice_map[str(idx)] = (provider.name, has_key)
 
         # 提示用户选择
         self.renderer.console.print()
@@ -217,7 +217,16 @@ class CLIApp:
 
         # 切换模型
         if choice in choice_map:
-            selected_name = choice_map[choice]
+            selected_name, has_key = choice_map[choice]
+
+            # 检查是否已配置 API Key
+            if not has_key:
+                self.renderer.print_error(f"\n[错误] 模型 {selected_name} 未配置 API Key")
+                self.renderer.print_info(f"\n请配置环境变量: BY19CODE_{selected_name.upper()}_API_KEY")
+                self.renderer.print_info(f"或在 config.json 中添加 api_key 字段")
+                self.renderer.print_info(f"\n参考文档: API_KEY_GUIDE.md")
+                return
+
             if selected_name == current_provider:
                 self.renderer.print_info(f"[信息] 已经在使用 {selected_name}")
             else:
