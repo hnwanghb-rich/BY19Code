@@ -291,6 +291,9 @@ class ChatEngine:
 
                 logger.info("[引擎] 执行工具: %s, 参数: %s", tool_name, tool_args)
 
+                # 发送工具执行开始事件（用于显示计时器）
+                yield StreamEvent(event_type="tool_executing_start", data=tool_name)
+
                 # 执行工具
                 try:
                     tool_result = await execute_tool(
@@ -303,6 +306,16 @@ class ChatEngine:
                     tool_result = f"[错误] 工具执行异常: {e}"
                     logger.error("[引擎] 工具执行失败: %s - %s", tool_name, e)
 
+                # 发送工具执行结束事件（停止计时器）
+                yield StreamEvent(event_type="tool_executing_end", data=tool_name)
+
+                # 截断过大的工具结果（避免上下文过大导致延迟）
+                MAX_TOOL_RESULT_LENGTH = 10000  # 最大 10000 字符
+                if len(tool_result) > MAX_TOOL_RESULT_LENGTH:
+                    original_length = len(tool_result)
+                    tool_result = tool_result[:MAX_TOOL_RESULT_LENGTH] + f"\n\n[结果过大，已截断。原始长度: {original_length} 字符，显示前 {MAX_TOOL_RESULT_LENGTH} 字符]"
+                    logger.warning("[引擎] 工具结果过大，已截断: %d → %d 字符", original_length, len(tool_result))
+
                 # 添加工具结果到历史
                 self.context.add_message(
                     Message(
@@ -313,6 +326,9 @@ class ChatEngine:
                 )
 
                 logger.debug("[引擎] 工具结果: %s", tool_result[:100])
+
+            # 所有工具执行完成，发送"处理中"事件
+            yield StreamEvent(event_type="processing", data="正在处理工具结果...")
 
             # 继续下一轮（LLM 会看到工具结果并继续回复）
 

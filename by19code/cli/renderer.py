@@ -37,6 +37,9 @@ class Renderer:
         self._spinner_live = None
         self._waiting_timer_live = None
         self._waiting_start_time = None
+        self._tool_timer_live = None
+        self._tool_timer_start_time = None
+        self._tool_timer_thread = None
 
     def render_stream(self, event: StreamEvent) -> None:
         """渲染流式事件。
@@ -61,6 +64,21 @@ class Renderer:
             tool_call = event.data
             args_json = json.dumps(tool_call.arguments, ensure_ascii=False, indent=2)
             self.console.print(f"[dim]  参数: {args_json}[/dim]")
+
+        elif event.event_type == "tool_executing_start":
+            # 工具开始执行，启动计时器
+            tool_name = event.data
+            self.start_tool_timer(tool_name)
+
+        elif event.event_type == "tool_executing_end":
+            # 工具执行结束，停止计时器
+            self.stop_tool_timer()
+
+        elif event.event_type == "processing":
+            # 显示处理中提示并启动等待计时器
+            message = event.data
+            self.console.print(f"\n[dim]{message}[/dim]")
+            self.start_waiting_timer()
 
         elif event.event_type == "usage":
             # 显示 token 用量（灰色小字）
@@ -219,3 +237,62 @@ class Renderer:
                 pass
             self._waiting_timer_live = None
             self._waiting_start_time = None
+
+    def start_tool_timer(self, tool_name: str) -> None:
+        """启动工具执行计时器。
+
+        参数
+        ----
+        tool_name : 工具名称
+        """
+        if self._tool_timer_live is None:
+            self._tool_timer_start_time = time.time()
+            from rich.text import Text
+
+            # 创建一个可更新的 Live 显示
+            self._tool_timer_live = Live(
+                Text(f"[工具执行] {tool_name}: 0 秒", style="yellow"),
+                console=self.console,
+                refresh_per_second=2
+            )
+            self._tool_timer_live.start()
+
+            # 启动后台任务更新计时器
+            import threading
+            self._tool_timer_thread = threading.Thread(
+                target=self._update_tool_timer,
+                args=(tool_name,),
+                daemon=True
+            )
+            self._tool_timer_thread.start()
+
+    def _update_tool_timer(self, tool_name: str) -> None:
+        """更新工具执行计时器（后台线程）。
+
+        参数
+        ----
+        tool_name : 工具名称
+        """
+        from rich.text import Text
+
+        while self._tool_timer_live is not None and self._tool_timer_start_time is not None:
+            elapsed = int(time.time() - self._tool_timer_start_time)
+            if self._tool_timer_live is not None:
+                try:
+                    self._tool_timer_live.update(
+                        Text(f"[工具执行] {tool_name}: {elapsed} 秒", style="yellow")
+                    )
+                except Exception:
+                    # Live 可能已经停止
+                    break
+            time.sleep(0.5)
+
+    def stop_tool_timer(self) -> None:
+        """停止工具执行计时器。"""
+        if self._tool_timer_live is not None:
+            try:
+                self._tool_timer_live.stop()
+            except Exception:
+                pass
+            self._tool_timer_live = None
+            self._tool_timer_start_time = None
