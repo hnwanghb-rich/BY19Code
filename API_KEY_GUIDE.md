@@ -22,8 +22,14 @@ notepad .env
 # Claude (Anthropic)
 BY19CODE_CLAUDE_API_KEY=sk-ant-api03-xxxxxxxxxxxxx
 
+# OpenAI
+BY19CODE_OPENAI_API_KEY=sk-xxxxxxxxxxxxx
+
 # DeepSeek
 BY19CODE_DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxx
+
+# MiniMax
+BY19CODE_MINIMAX_API_KEY=xxxxxxxxxxxxx
 
 # Kimi (Moonshot AI)
 BY19CODE_KIMI_API_KEY=sk-xxxxxxxxxxxxx
@@ -90,21 +96,37 @@ python quick_test.py
 - 可以使用第三方中转服务
 - 在 `config.json` 中修改 `base_url` 为中转站地址
 
-### 2. DeepSeek
+### 2. OpenAI
+
+- 网址：https://platform.openai.com/
+- 注册并创建 API Key
+- 格式：`sk-xxxxxxxxxxxxx`
+- 支持 GPT-4o、GPT-4、GPT-3.5 等模型
+- 需要国际信用卡支付
+
+### 3. DeepSeek
 
 - 网址：https://platform.deepseek.com/
 - 注册并创建 API Key
 - 格式：`sk-xxxxxxxxxxxxx`
 - 新用户通常有免费额度
 
-### 3. Kimi (Moonshot AI)
+### 4. MiniMax
+
+- 网址：https://api.minimax.chat/
+- 注册并创建 API Key
+- 支持 abab6.5-chat 等模型
+- 国内服务，响应速度快
+- 新用户有免费额度
+
+### 5. Kimi (Moonshot AI)
 
 - 网址：https://platform.moonshot.cn/
 - 注册并创建 API Key
 - 格式：`sk-xxxxxxxxxxxxx`
 - 支持长上下文（128K）
 
-### 4. 豆包 (ByteDance)
+### 6. 豆包 (ByteDance)
 
 **特殊配置步骤：**
 
@@ -123,7 +145,7 @@ python quick_test.py
    }
    ```
 
-### 5. 智谱 GLM (Zhipu AI)
+### 7. 智谱 GLM (Zhipu AI)
 
 - 网址：https://open.bigmodel.cn/
 - 注册并创建 API Key
@@ -135,21 +157,29 @@ python quick_test.py
 | 模型 | 输入费用 | 输出费用 | 特点 |
 |------|---------|---------|------|
 | Claude | ¥3.00/百万tokens | ¥15.00/百万tokens | 能力最强，适合复杂任务 |
+| OpenAI GPT-4o | ¥2.50/百万tokens | ¥10.00/百万tokens | 国际主流，能力强 |
 | DeepSeek | ¥0.14/百万tokens | ¥0.28/百万tokens | 性价比高，适合日常开发 |
+| MiniMax | ¥0.015/百万tokens | ¥0.015/百万tokens | 极低价格，国内服务 |
 | Kimi | ¥0.12/百万tokens | ¥0.12/百万tokens | 长上下文，适合文档处理 |
 | 豆包 | 按实际计费 | 按实际计费 | 国内服务，响应快 |
-| GLM | ¥0.05/百万tokens | ¥0.05/百万tokens | 最便宜，适合测试 |
+| GLM | ¥0.05/百万tokens | ¥0.05/百万tokens | 便宜，适合测试 |
 
 ## 使用建议
 
 ### 开发测试阶段
-推荐使用：**DeepSeek** 或 **GLM**
-- 费用低
+推荐使用：**MiniMax** 或 **GLM**
+- 费用极低（MiniMax最便宜）
 - 性能够用
 - 适合频繁调试
 
+### 日常开发
+推荐使用：**DeepSeek**
+- 性价比高
+- 性能稳定
+- 适合日常编程任务
+
 ### 生产环境
-推荐使用：**Claude** 或 **Kimi**
+推荐使用：**Claude** 或 **OpenAI GPT-4o**
 - 能力强
 - 稳定性好
 - 适合复杂任务

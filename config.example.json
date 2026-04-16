@@ -22,6 +22,28 @@
       "max_tokens": 8192,
       "cost_per_1k_input": 0.14,
       "cost_per_1k_output": 0.28
+    },
+    {
+      "name": "openai",
+      "display_name": "OpenAI GPT-4o",
+      "provider_type": "openai",
+      "api_key": "${BY19CODE_OPENAI_API_KEY}",
+      "base_url": "https://api.openai.com/v1",
+      "model": "gpt-4o",
+      "max_tokens": 8192,
+      "cost_per_1k_input": 2.5,
+      "cost_per_1k_output": 10.0
+    },
+    {
+      "name": "minimax",
+      "display_name": "MiniMax",
+      "provider_type": "openai_compat",
+      "api_key": "${BY19CODE_MINIMAX_API_KEY}",
+      "base_url": "https://api.minimax.chat/v1",
+      "model": "abab6.5-chat",
+      "max_tokens": 8192,
+      "cost_per_1k_input": 0.015,
+      "cost_per_1k_output": 0.015
     }
   ],
   "active_provider": "claude",
