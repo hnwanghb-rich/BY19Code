@@ -610,6 +610,117 @@ BY19Code v0.1.0 - AI 编程助手
 
 ---
 
+### 5.7 项目目录切换
+
+**功能描述**：支持在运行时切换项目工作目录，无需重启程序。
+
+**实现方式**：
+- 使用 `/switch-project` 命令切换目录
+- 切换时不执行初始化操作（如生成 BY19Code.md）
+- 切换后自动搜索项目描述文件并显示
+- 更新引擎的项目根目录和 System Prompt
+
+**用户交互**：
+```
+> /switch-project
+
+[切换项目目录]
+当前目录: D:\ClaudeCodeX\BY19Code
+
+请输入新的项目目录路径: D:\Projects\MyApp
+
+[成功] 已切换到: D:\Projects\MyApp
+
+当前项目：MyApp
+项目描述：一个示例应用程序
+工作目录：D:\Projects\MyApp
+```
+
+**代码位置**：
+- `by19code/cli/app.py` - `_switch_project_directory()` 方法
+- `by19code/core/engine.py` - 支持动态更新 project_root
+
+---
+
+### 5.8 项目描述自动识别
+
+**功能描述**：显示项目信息时，自动搜索项目目录下的 MD 文件或 README 文件，提取项目描述。
+
+**搜索优先级**：
+1. BY19Code.md
+2. README.md
+3. CLAUDE.md
+4. 其他 .md 文件
+
+**提取规则**：
+- 如果第一行是 Markdown 标题（以 # 开头），提取标题内容
+- 否则提取前 200 个字符作为描述
+
+**用户体验**：
+```
+当前项目：BY19Code
+项目描述：BY19Code 开发约束
+工作目录：D:\ClaudeCodeX\BY19Code
+```
+
+**代码位置**：
+- `by19code/cli/app.py` - `_find_project_description()` 方法
+- `by19code/cli/renderer.py` - `render_project_info()` 支持描述参数
+
+---
+
+### 5.9 等待响应计时显示
+
+**功能描述**：在等待 LLM 响应时，显示实时计时器，让用户了解等待时长。
+
+**实现方式**：
+- 发送消息后立即启动计时器
+- 每秒更新显示（如：等待响应: 3 秒）
+- 收到第一个响应事件后停止计时器
+- 使用后台线程更新计时，不阻塞主流程
+
+**显示效果**：
+```
+> 帮我分析这段代码
+
+等待响应: 0 秒
+等待响应: 1 秒
+等待响应: 2 秒
+
+[AI 开始响应...]
+```
+
+**代码位置**：
+- `by19code/cli/renderer.py` - `start_waiting_timer()` / `stop_waiting_timer()` 方法
+- `by19code/cli/app.py` - `_handle_chat()` 中调用计时器
+
+---
+
+### 5.10 模型工具支持标识
+
+**功能描述**：在模型选择界面标识哪些模型不支持工具调用（function calling）。
+
+**实现方式**：
+- 配置项 `supports_tools` 控制模型是否支持工具
+- 不支持工具的模型显示 `[仅对话]` 标记
+- 不支持工具的模型不会传递工具定义给 API
+- System Prompt 会根据工具支持情况调整
+
+**用户体验**：
+```
+[可用模型]
+  1. claude - Claude (Anthropic) [OK]
+  2. deepseek - DeepSeek [OK]
+* 3. minimax - MiniMax [OK] [仅对话]
+```
+
+**代码位置**：
+- `by19code/config/settings.py` - `LLMProviderConfig.supports_tools`
+- `by19code/core/engine.py` - 根据配置决定是否传递工具
+- `by19code/cli/app.py` - 显示工具支持标识
+
+---
+
 ## 5 – 8 核心开发规则、验收标准、迭代规划、风险
 
 （与上一版一致，验收标准中的路径穿越测试使用 `C:\Windows\System32\config\SAM` 替代 `/etc/passwd`，终极验收路径使用 `D:\Projects\test-calc`。）

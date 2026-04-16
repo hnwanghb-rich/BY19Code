@@ -50,8 +50,7 @@ class CLIApp:
         self.renderer.render_welcome()
 
         # 显示当前项目信息
-        project_name = self.project_root.name
-        self.renderer.render_project_info(str(self.project_root), project_name)
+        await self._show_project_info()
 
         try:
             while True:
@@ -140,8 +139,11 @@ class CLIApp:
 
             elif cmd == "/project":
                 # 显示当前项目信息
-                project_name = self.project_root.name
-                self.renderer.render_project_info(str(self.project_root), project_name)
+                await self._show_project_info()
+
+            elif cmd == "/switch-project":
+                # 切换项目目录
+                await self._switch_project_directory()
 
             elif cmd == "/switch":
                 if not args:
@@ -237,6 +239,108 @@ class CLIApp:
                 result = await self.engine.switch_model(selected_name)
                 self.renderer.print_success(result)
 
+    async def _show_project_info(self) -> None:
+        """显示当前项目信息（包括项目描述）。"""
+        project_name = self.project_root.name
+
+        # 搜索项目描述文件
+        project_desc = self._find_project_description()
+
+        self.renderer.render_project_info(
+            str(self.project_root),
+            project_name,
+            project_desc
+        )
+
+    def _find_project_description(self) -> str:
+        """搜索项目目录下的 MD 文件或 README 文件，提取项目描述。
+
+        返回
+        ----
+        str : 项目描述，未找到返回空字符串
+        """
+        # 优先级：BY19Code.md > README.md > CLAUDE.md > 其他 .md 文件
+        priority_files = [
+            "BY19Code.md",
+            "README.md",
+            "CLAUDE.md",
+        ]
+
+        # 先检查优先级文件
+        for filename in priority_files:
+            file_path = self.project_root / filename
+            if file_path.exists():
+                try:
+                    content = file_path.read_text(encoding="utf-8")
+                    # 提取第一行标题或前 200 个字符
+                    lines = content.strip().split('\n')
+                    if lines:
+                        first_line = lines[0].strip()
+                        # 如果是 Markdown 标题，去掉 # 号
+                        if first_line.startswith('#'):
+                            return first_line.lstrip('#').strip()
+                        # 否则返回前 200 个字符
+                        return content[:200].strip()
+                except Exception as e:
+                    logger.warning("[CLI] 读取项目描述文件失败: %s - %s", filename, e)
+
+        # 如果没有找到优先级文件，搜索其他 .md 文件
+        try:
+            md_files = list(self.project_root.glob("*.md"))
+            if md_files:
+                # 使用第一个找到的 .md 文件
+                file_path = md_files[0]
+                content = file_path.read_text(encoding="utf-8")
+                lines = content.strip().split('\n')
+                if lines:
+                    first_line = lines[0].strip()
+                    if first_line.startswith('#'):
+                        return first_line.lstrip('#').strip()
+                    return content[:200].strip()
+        except Exception as e:
+            logger.warning("[CLI] 搜索 .md 文件失败: %s", e)
+
+        return ""
+
+    async def _switch_project_directory(self) -> None:
+        """切换项目工作目录。"""
+        from rich.prompt import Prompt
+
+        self.renderer.print_info("\n[切换项目目录]")
+        self.renderer.print_info(f"当前目录: {self.project_root}")
+
+        # 询问新目录
+        new_path = Prompt.ask("\n请输入新的项目目录路径")
+        new_project_root = Path(new_path).resolve()
+
+        # 验证目录是否存在
+        if not new_project_root.exists():
+            self.renderer.print_error(f"\n[错误] 目录不存在: {new_project_root}")
+            return
+
+        if not new_project_root.is_dir():
+            self.renderer.print_error(f"\n[错误] 路径不是目录: {new_project_root}")
+            return
+
+        # 切换目录
+        old_root = self.project_root
+        self.project_root = new_project_root
+
+        # 更新引擎的项目根目录
+        self.engine.project_root = new_project_root
+
+        # 重新初始化 System Prompt（包含新的项目路径）
+        self.engine._init_system_prompt()
+
+        # 更新配置
+        self.config.workspace.default_path = str(new_project_root)
+
+        logger.info("[CLI] 切换项目目录: %s → %s", old_root, new_project_root)
+
+        # 显示新项目信息
+        self.renderer.print_success(f"\n[成功] 已切换到: {new_project_root}")
+        await self._show_project_info()
+
     async def _handle_chat(self, user_input: str) -> None:
         """处理普通对话。
 
@@ -247,10 +351,23 @@ class CLIApp:
         logger.info("[CLI] 用户输入: %s", user_input[:50])
 
         try:
+            # 启动等待计时器
+            self.renderer.start_waiting_timer()
+
             # 调用引擎并流式渲染响应
             async for event in self.engine.chat(user_input):
+                # 停止等待计时器（收到第一个事件）
+                self.renderer.stop_waiting_timer()
+
+                # 渲染事件
                 self.renderer.render_stream(event)
 
+            # 确保计时器已停止
+            self.renderer.stop_waiting_timer()
+
         except Exception as e:
+            # 停止计时器
+            self.renderer.stop_waiting_timer()
+
             logger.error("[CLI] 对话处理失败: %s", e, exc_info=True)
             self.renderer.print_error(f"\n[错误] 对话处理失败: {e}")
