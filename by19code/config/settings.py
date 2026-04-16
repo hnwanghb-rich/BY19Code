@@ -220,19 +220,27 @@ def load_config(
             ← overrides 参数
               ← 环境变量 BY19CODE_{PROVIDER}_API_KEY（仅填充 api_key 空值）
     """
-    # 加载 .env 文件（如果存在）
-    try:
-        from dotenv import load_dotenv
-        if project_dir:
-            env_file = Path(project_dir) / ".env"
-            if env_file.exists():
-                load_dotenv(env_file)
-                logger.debug("[配置] 已加载 .env 文件: %s", env_file)
-    except ImportError:
-        logger.debug("[配置] python-dotenv 未安装，跳过 .env 文件加载")
-
     # 第一层：BY19Code 安装目录的默认配置
     by19code_root = Path(__file__).parent.parent.parent  # by19code/config/settings.py -> BY19Code/
+
+    # 加载 .env 文件（优先级：BY19Code 安装目录 → 项目目录）
+    try:
+        from dotenv import load_dotenv
+
+        # 1. 先加载 BY19Code 安装目录的 .env（全局 API Keys）
+        by19code_env = by19code_root / ".env"
+        if by19code_env.exists():
+            load_dotenv(by19code_env)
+            logger.debug("[配置] 已加载 BY19Code .env 文件: %s", by19code_env)
+
+        # 2. 再加载项目目录的 .env（可覆盖全局配置）
+        if project_dir:
+            project_env = Path(project_dir) / ".env"
+            if project_env.exists():
+                load_dotenv(project_env, override=True)
+                logger.debug("[配置] 已加载项目 .env 文件: %s", project_env)
+    except ImportError:
+        logger.debug("[配置] python-dotenv 未安装，跳过 .env 文件加载")
     merged: dict[str, Any] = _load_json_file(by19code_root / "config.json")
 
     # 如果没有找到，尝试 config.example.json
