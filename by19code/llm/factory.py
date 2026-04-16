@@ -9,7 +9,9 @@
 默认注册项（模块加载时自动执行）
 ----------------------------------
   "claude"   → ClaudeProvider
+  "openai"   → OpenAICompatibleProvider
   "deepseek" → OpenAICompatibleProvider
+  "minimax"  → OpenAICompatibleProvider
   "kimi"     → OpenAICompatibleProvider
   "doubao"   → OpenAICompatibleProvider
   "glm"      → OpenAICompatibleProvider
@@ -228,7 +230,9 @@ from by19code.llm.openai_provider import OpenAICompatibleProvider  # noqa: E402
 LLMFactory.register("claude", ClaudeProvider)
 
 # 注册 OpenAI 兼容 Provider（所有使用 OpenAI API 格式的模型）
+LLMFactory.register("openai", OpenAICompatibleProvider)
 LLMFactory.register("deepseek", OpenAICompatibleProvider)
+LLMFactory.register("minimax", OpenAICompatibleProvider)
 LLMFactory.register("kimi", OpenAICompatibleProvider)
 LLMFactory.register("doubao", OpenAICompatibleProvider)
 LLMFactory.register("glm", OpenAICompatibleProvider)
