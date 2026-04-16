@@ -85,6 +85,13 @@ class CLIApp:
         finally:
             # 清理资源
             logger.info("[CLI] 清理资源...")
+
+            # 保存最后使用的项目路径
+            try:
+                self._save_last_project_path()
+            except Exception as e:
+                logger.warning("[CLI] 保存项目路径时出错: %s", e)
+
             try:
                 # 关闭数据库连接
                 from by19code.db.database import close_db
@@ -376,6 +383,25 @@ class CLIApp:
             # 空目录
             self.renderer.console.print(f"[bold cyan]当前工作目录：[/bold cyan]{new_project_root}")
             self.renderer.console.print(f"[yellow]（目录为空）[/yellow]\n")
+
+    def _save_last_project_path(self) -> None:
+        """保存最后使用的项目路径到全局配置。"""
+        try:
+            from by19code.config.settings import save_config
+
+            # 更新配置中的最后项目路径
+            self.config.workspace.last_project_path = str(self.project_root)
+
+            # 保存到全局配置文件
+            global_config_dir = Path.home() / ".by19code"
+            global_config_dir.mkdir(parents=True, exist_ok=True)
+            global_config_path = global_config_dir / "config.json"
+
+            save_config(self.config, global_config_path)
+            logger.info("[CLI] 已保存最后项目路径: %s", self.project_root)
+
+        except Exception as e:
+            logger.error("[CLI] 保存项目路径失败: %s", e)
 
     async def _handle_chat(self, user_input: str) -> None:
         """处理普通对话。

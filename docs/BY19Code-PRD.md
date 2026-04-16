@@ -507,14 +507,35 @@ $env:BY19CODE_DEEPSEEK_API_KEY = "sk-xxx"
 **功能描述**：启动时询问或确认项目工作目录，支持在不同项目间切换，记录当前工作目录。
 
 **启动流程**：
-1. 如果未指定 `--project` 参数，询问用户选择：
-   - 使用当前目录
-   - 指定其他目录
-2. 验证目录是否存在，不存在则创建
-3. 保存工作目录到配置
-4. 显示当前项目信息
+1. 如果未指定 `--project` 参数，检查是否有最后使用的项目路径
+2. 如果有最后使用的路径，提供三个选项：
+   - 0. 继续使用当前目录（最后使用的目录）
+   - 1. 使用当前命令行目录
+   - 2. 指定其他目录
+3. 如果没有最后使用的路径，提供两个选项：
+   - 1. 使用当前目录
+   - 2. 指定其他目录
+4. 验证目录是否存在，不存在则创建
+5. 程序退出时自动保存最后使用的项目路径
 
-**用户交互**：
+**用户交互示例 1（有历史记录）**：
+```
+欢迎使用 BY19Code
+
+当前目录：D:\Projects\MyApp
+
+请选择项目工作目录：
+  0. 继续使用当前目录
+  1. 使用当前命令行目录
+  2. 指定其他目录
+
+请选择 [0/1/2] (0): 0
+
+当前项目：MyApp
+工作目录：D:\Projects\MyApp
+```
+
+**用户交互示例 2（无历史记录）**：
 ```
 欢迎使用 BY19Code
 
@@ -529,12 +550,18 @@ $env:BY19CODE_DEEPSEEK_API_KEY = "sk-xxx"
 工作目录：D:\Projects\MyApp
 ```
 
+**配置存储**：
+- 最后使用的项目路径保存在 `%USERPROFILE%\.by19code\config.json`
+- 配置项：`workspace.last_project_path`
+
 **命令支持**：
 - `/project` - 显示当前项目信息
+- `/path <目录>` - 切换项目目录
 
 **代码位置**：
 - `by19code/main.py` - 启动时询问项目目录
-- `by19code/cli/app.py` - `/project` 命令处理
+- `by19code/cli/app.py` - `/project` 命令处理、保存路径
+- `by19code/config/settings.py` - `WorkspaceConfig.last_project_path`
 - `by19code/cli/renderer.py` - `render_project_info()` 方法
 
 ---

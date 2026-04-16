@@ -58,28 +58,57 @@ def main(config: str | None, project: str | None):
 
         # 确定项目根目录
         if project is None:
+            # 加载配置以获取最后使用的项目路径
+            temp_config = load_config(project_dir=None)
+            last_project = temp_config.workspace.last_project_path
+
             # 询问用户选择项目目录
             from rich.console import Console
             from rich.prompt import Prompt
 
             console = Console()
             console.print("\n[bold cyan]欢迎使用 BY19Code[/bold cyan]")
-            console.print("\n请指定项目工作目录：")
-            console.print("  1. 使用当前目录")
-            console.print("  2. 指定其他目录")
 
-            choice = Prompt.ask("\n请选择", choices=["1", "2"], default="1")
+            if last_project and Path(last_project).exists():
+                # 有最后使用的目录
+                console.print(f"\n[dim]当前目录：{last_project}[/dim]")
+                console.print("\n请选择项目工作目录：")
+                console.print("  0. 继续使用当前目录")
+                console.print("  1. 使用当前命令行目录")
+                console.print("  2. 指定其他目录")
 
-            if choice == "1":
-                project_root = Path.cwd()
+                choice = Prompt.ask("\n请选择", choices=["0", "1", "2"], default="0")
+
+                if choice == "0":
+                    project_root = Path(last_project).resolve()
+                elif choice == "1":
+                    project_root = Path.cwd()
+                else:
+                    project_path = Prompt.ask("请输入项目目录路径")
+                    project_root = Path(project_path).resolve()
+
+                    # 验证目录是否存在
+                    if not project_root.exists():
+                        console.print(f"[yellow]目录不存在，将创建: {project_root}[/yellow]")
+                        project_root.mkdir(parents=True, exist_ok=True)
             else:
-                project_path = Prompt.ask("请输入项目目录路径")
-                project_root = Path(project_path).resolve()
+                # 没有最后使用的目录
+                console.print("\n请指定项目工作目录：")
+                console.print("  1. 使用当前目录")
+                console.print("  2. 指定其他目录")
 
-                # 验证目录是否存在
-                if not project_root.exists():
-                    console.print(f"[yellow]目录不存在，将创建: {project_root}[/yellow]")
-                    project_root.mkdir(parents=True, exist_ok=True)
+                choice = Prompt.ask("\n请选择", choices=["1", "2"], default="1")
+
+                if choice == "1":
+                    project_root = Path.cwd()
+                else:
+                    project_path = Prompt.ask("请输入项目目录路径")
+                    project_root = Path(project_path).resolve()
+
+                    # 验证目录是否存在
+                    if not project_root.exists():
+                        console.print(f"[yellow]目录不存在，将创建: {project_root}[/yellow]")
+                        project_root.mkdir(parents=True, exist_ok=True)
         else:
             project_root = Path(project).resolve()
 

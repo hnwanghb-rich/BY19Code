@@ -74,6 +74,7 @@ class WorkspaceConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     default_path: str = "."
+    last_project_path: str = ""  # 最后使用的项目路径
 
 
 class SafetyConfig(BaseModel):
