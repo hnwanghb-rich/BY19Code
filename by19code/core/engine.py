@@ -98,17 +98,14 @@ class ChatEngine:
 
     def _init_system_prompt(self) -> None:
         """初始化 System Prompt（Windows 版本）"""
-        system_content = f"""你是 BY19Code，一个运行在 Windows 系统上的 AI 编程助手。
+        # 检查当前模型是否支持工具调用
+        active_provider_config = self.config.get_active_provider()
+        supports_tools = active_provider_config.supports_tools if active_provider_config else True
 
-## 运行环境
-- 操作系统：Windows
-- Shell：PowerShell / cmd.exe
-- 执行命令时请使用 Windows 兼容语法
-- 文件路径使用 pathlib 或正斜杠，避免反斜杠转义问题
-- 所有文件读写使用 UTF-8 编码
-
+        if supports_tools:
+            tools_info = """
 ## 当前项目
-- 项目路径：{self.project_root}
+- 项目路径：{project_root}
 - 你可以使用以下工具：read_file, write_file, edit_file, run_command, list_directory, git_commit, git_diff, git_log, git_status, git_create_branch
 
 ## 工作原则
@@ -118,9 +115,31 @@ class ChatEngine:
 - 执行命令前说明要执行什么
 - 使用工具时要谨慎，确保操作的正确性
 """
+        else:
+            tools_info = """
+## 当前项目
+- 项目路径：{project_root}
+- 注意：当前模型不支持工具调用（function calling），你只能提供建议和指导，无法直接操作文件或执行命令
+
+## 工作原则
+- 提供详细的代码示例和操作步骤
+- 给出清晰的命令行指令供用户手动执行
+- 解释每个步骤的目的和注意事项
+"""
+
+        system_content = f"""你是 BY19Code，一个运行在 Windows 系统上的 AI 编程助手。
+
+## 运行环境
+- 操作系统：Windows
+- Shell：PowerShell / cmd.exe
+- 执行命令时请使用 Windows 兼容语法
+- 文件路径使用 pathlib 或正斜杠，避免反斜杠转义问题
+- 所有文件读写使用 UTF-8 编码
+{tools_info.format(project_root=self.project_root)}
+"""
 
         self.context.add_message(Message(role="system", content=system_content))
-        logger.debug("[引擎] System Prompt 已初始化")
+        logger.debug("[引擎] System Prompt 已初始化 (supports_tools=%s)", supports_tools)
 
     def _get_next_available_provider(self) -> str | None:
         """获取下一个可用的模型。
@@ -191,10 +210,15 @@ class ChatEngine:
             self._last_event_time = time.time()
             has_received_event = False
 
+            # 检查当前模型是否支持工具调用
+            active_provider_config = self.config.get_active_provider()
+            supports_tools = active_provider_config.supports_tools if active_provider_config else True
+            tools_to_use = TOOL_DEFINITIONS if supports_tools else []
+
             try:
                 async for event in self.provider.stream_chat(
                     messages=self.context.get_messages(),
-                    tools=TOOL_DEFINITIONS,  # 直接传入 ToolDefinition 列表
+                    tools=tools_to_use,  # 根据模型配置决定是否传递工具
                     model=None,  # 使用默认模型
                     temperature=0.7,
                     max_tokens=8192,
@@ -319,6 +343,15 @@ class ChatEngine:
             # 替换当前 Provider
             old_provider = self.provider.provider_name
             self.provider = new_provider
+
+            # 重新初始化 System Prompt（因为工具支持可能不同）
+            # 清除旧的 system 消息
+            messages = self.context.get_messages()
+            if messages and messages[0].role == "system":
+                messages.pop(0)
+
+            # 添加新的 system 消息
+            self._init_system_prompt()
 
             logger.info("[引擎] 切换模型: %s → %s", old_provider, provider_name)
 

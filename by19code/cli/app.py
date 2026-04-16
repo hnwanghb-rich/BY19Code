@@ -195,8 +195,12 @@ class CLIApp:
             has_key = provider.api_key and provider.api_key != f"${{BY19CODE_{provider.name.upper()}_API_KEY}}"
             key_status = "[green][OK][/green]" if has_key else "[red][NO][/red]"
 
+            # 检查是否支持工具调用
+            supports_tools = provider.supports_tools if hasattr(provider, 'supports_tools') else True
+            tools_status = "" if supports_tools else " [yellow][仅对话][/yellow]"
+
             self.renderer.console.print(
-                f"{marker}[bold]{idx}.[/bold] [bold]{provider.name}[/bold] - {provider.display_name} {key_status}"
+                f"{marker}[bold]{idx}.[/bold] [bold]{provider.name}[/bold] - {provider.display_name} {key_status}{tools_status}"
             )
             self.renderer.console.print(
                 f"    模型: {provider.model} | "

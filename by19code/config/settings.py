@@ -56,6 +56,8 @@ class LLMProviderConfig(BaseModel):
     max_tokens: int = 8192
     cost_per_1k_input: float = 0.0
     cost_per_1k_output: float = 0.0
+    # 是否支持工具调用（某些模型不支持 function calling）
+    supports_tools: bool = True
 
 
 class GitConfig(BaseModel):
