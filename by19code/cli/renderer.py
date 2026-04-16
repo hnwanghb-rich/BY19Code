@@ -104,6 +104,7 @@ class Renderer:
             "  [cyan]/help[/cyan]     - 显示此帮助\n"
             "  [cyan]/model[/cyan]    - 列出所有可用模型\n"
             "  [cyan]/model[/cyan] <名称> - 切换到指定模型（如：/model kimi）\n"
+            "  [cyan]/switch[/cyan]   - 切换自动切换模式（超时是否自动换模型）\n"
             "  [cyan]/project[/cyan]  - 显示当前项目信息\n"
             "  [cyan]/path[/cyan] <目录> - 切换项目工作目录（如：/path D:\\MyProject）\n"
             "  [cyan]/clear[/cyan]    - 清空对话历史\n"

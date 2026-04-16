@@ -86,14 +86,20 @@ class ChatEngine:
         # 超时切换相关
         self._last_event_time = time.time()
         self._timeout_threshold = config.safety.change_model_time
+        self._timeout_start_time = None  # 记录超时开始时间
+
+        # 超时跟踪器
+        from by19code.core.timeout_tracker import TimeoutTracker
+        self.timeout_tracker = TimeoutTracker()
 
         # 初始化 System Prompt
         self._init_system_prompt()
 
         logger.info(
-            "[引擎] 初始化完成: provider=%s, project=%s",
+            "[引擎] 初始化完成: provider=%s, project=%s, auto_switch=%s",
             self.provider.provider_name,
             self.project_root,
+            config.safety.auto_switch_on_timeout,
         )
 
     def _init_system_prompt(self) -> None:
@@ -142,30 +148,40 @@ class ChatEngine:
         logger.debug("[引擎] System Prompt 已初始化 (supports_tools=%s)", supports_tools)
 
     def _get_next_available_provider(self) -> str | None:
-        """获取下一个可用的模型。
+        """获取下一个可用的模型（优先选择超时次数最少的）。
 
         返回
         ----
         str | None : 下一个可用模型名称，如果没有则返回 None
         """
-        current_idx = -1
+        current_provider = self.config.active_provider
         available_providers = []
 
-        for idx, provider in enumerate(self.config.llm_providers):
+        for provider in self.config.llm_providers:
             # 检查是否有 API Key
             has_key = provider.api_key and provider.api_key != f"${{BY19CODE_{provider.name.upper()}_API_KEY}}"
             if has_key:
                 available_providers.append(provider.name)
-                if provider.name == self.config.active_provider:
-                    current_idx = len(available_providers) - 1
 
         # 如果只有一个可用模型，返回 None
         if len(available_providers) <= 1:
             return None
 
-        # 返回下一个模型（循环）
-        next_idx = (current_idx + 1) % len(available_providers)
-        return available_providers[next_idx]
+        # 使用超时跟踪器选择超时次数最少的模型
+        best_model = self.timeout_tracker.get_least_timeout_model(
+            available_providers,
+            exclude=current_provider
+        )
+
+        if best_model:
+            timeout_count = self.timeout_tracker.get_timeout_count(best_model)
+            logger.info(
+                "[引擎] 选择下一个模型: %s (历史超时 %d 次)",
+                best_model,
+                timeout_count
+            )
+
+        return best_model
 
     async def chat(self, user_input: str) -> AsyncGenerator[StreamEvent, None]:
         """处理用户输入并生成回复（流式）。
@@ -208,12 +224,16 @@ class ChatEngine:
 
             # 重置超时计时器
             self._last_event_time = time.time()
+            self._timeout_start_time = None  # 重置超时开始时间
             has_received_event = False
 
             # 检查当前模型是否支持工具调用
             active_provider_config = self.config.get_active_provider()
             supports_tools = active_provider_config.supports_tools if active_provider_config else True
             tools_to_use = TOOL_DEFINITIONS if supports_tools else []
+
+            # 创建一个异步任务来检测超时
+            timeout_detected = False
 
             try:
                 async for event in self.provider.stream_chat(
@@ -223,8 +243,35 @@ class ChatEngine:
                     temperature=0.7,
                     max_tokens=8192,
                 ):
+                    # 检查是否超时
+                    current_time = time.time()
+                    elapsed = current_time - self._last_event_time
+
+                    # 如果超过阈值且启用了自动切换
+                    if elapsed > self._timeout_threshold and self.config.safety.auto_switch_on_timeout:
+                        if self._timeout_start_time is None:
+                            # 第一次检测到超时
+                            self._timeout_start_time = current_time
+                            logger.warning(
+                                "[引擎] 检测到超时: %s 已 %.1f 秒无响应",
+                                self.config.active_provider,
+                                elapsed
+                            )
+
+                        # 如果持续超时，触发切换
+                        timeout_duration = current_time - self._timeout_start_time
+                        if timeout_duration >= 5:  # 持续 5 秒确认超时
+                            timeout_detected = True
+                            logger.error(
+                                "[引擎] 模型 %s 超时 (%.1f 秒)，准备切换",
+                                self.config.active_provider,
+                                elapsed
+                            )
+                            break
+
                     # 更新最后事件时间
-                    self._last_event_time = time.time()
+                    self._last_event_time = current_time
+                    self._timeout_start_time = None  # 收到事件，重置超时开始时间
                     has_received_event = True
 
                     # 转发事件给调用方
@@ -237,6 +284,37 @@ class ChatEngine:
                         tool_calls.append(event.data)
                     elif event.event_type == "done":
                         final_event = event
+
+                # 如果检测到超时，记录并切换模型
+                if timeout_detected:
+                    current_model = self.config.active_provider
+
+                    # 记录超时
+                    self.timeout_tracker.record_timeout(current_model)
+
+                    # 获取下一个模型
+                    next_model = self._get_next_available_provider()
+
+                    if next_model:
+                        # 切换模型
+                        yield StreamEvent(
+                            event_type="error",
+                            data=f"[警告] 模型 {current_model} 响应超时，自动切换到 {next_model}"
+                        )
+
+                        await self.switch_model(next_model)
+
+                        # 重新发起请求（递归调用）
+                        logger.info("[引擎] 使用新模型 %s 重新处理请求", next_model)
+                        async for retry_event in self.chat(user_input):
+                            yield retry_event
+                        return
+                    else:
+                        yield StreamEvent(
+                            event_type="error",
+                            data=f"[错误] 模型 {current_model} 超时，但没有其他可用模型"
+                        )
+                        return
 
             except LLMAuthError as e:
                 error_msg = f"[错误] API Key 无效，请检查配置: {e}"

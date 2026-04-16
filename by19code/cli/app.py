@@ -158,12 +158,8 @@ class CLIApp:
                     await self._switch_project_directory()
 
             elif cmd == "/switch":
-                if not args:
-                    self.renderer.print_error("[错误] 请指定 provider 名称（如：claude, deepseek）")
-                    return
-
-                result = await self.engine.switch_model(args)
-                self.renderer.print_success(result)
+                # 切换自动切换模式
+                await self._toggle_auto_switch_mode()
 
             elif cmd == "/model":
                 # 列出所有可用模型或切换模型
@@ -250,6 +246,55 @@ class CLIApp:
             else:
                 result = await self.engine.switch_model(selected_name)
                 self.renderer.print_success(result)
+
+    async def _toggle_auto_switch_mode(self) -> None:
+        """切换自动切换模式。"""
+        from rich.prompt import Prompt
+
+        current_mode = self.config.safety.auto_switch_on_timeout
+        current_timeout = self.config.safety.change_model_time
+
+        self.renderer.print_info("\n[自动切换模式设置]")
+        self.renderer.print_info(f"当前状态: {'启用' if current_mode else '禁用'}")
+        self.renderer.print_info(f"超时阈值: {current_timeout} 秒")
+        self.renderer.print_info("\n说明：")
+        self.renderer.print_info("  - 启用后，模型超时将自动切换到超时次数最少的模型")
+        self.renderer.print_info("  - 禁用后，模型超时将保持等待")
+        self.renderer.print_info("\n请选择：")
+        self.renderer.print_info("  0. 禁用自动切换（保持等待）")
+        self.renderer.print_info("  1. 启用自动切换（超时自动换模型）")
+
+        choice = Prompt.ask("\n请选择", choices=["0", "1"], default="0" if not current_mode else "1")
+
+        new_mode = (choice == "1")
+
+        if new_mode != current_mode:
+            self.config.safety.auto_switch_on_timeout = new_mode
+
+            # 保存到全局配置
+            try:
+                from by19code.config.settings import save_config
+                from pathlib import Path
+
+                global_config_dir = Path.home() / ".by19code"
+                global_config_dir.mkdir(parents=True, exist_ok=True)
+                global_config_path = global_config_dir / "config.json"
+
+                save_config(self.config, global_config_path)
+                logger.info("[CLI] 已保存自动切换模式: %s", new_mode)
+            except Exception as e:
+                logger.error("[CLI] 保存配置失败: %s", e)
+
+            status = "启用" if new_mode else "禁用"
+            self.renderer.print_success(f"\n[成功] 已{status}自动切换模式")
+
+            if new_mode:
+                self.renderer.print_info(f"模型超过 {current_timeout} 秒无响应时将自动切换")
+                self.renderer.print_info("优先选择历史超时次数最少的模型")
+            else:
+                self.renderer.print_info("模型超时时将保持等待")
+        else:
+            self.renderer.print_info(f"\n[信息] 保持当前设置：{'启用' if current_mode else '禁用'}")
 
     async def _show_project_info(self) -> None:
         """显示当前项目信息（包括项目描述）。"""

@@ -52,6 +52,7 @@
     "command_timeout_seconds": 30,
     "max_tool_rounds": 20,
     "change_model_time": 60,
+    "auto_switch_on_timeout": false,
     "blocked_commands": [
       "format",
       "shutdown",
