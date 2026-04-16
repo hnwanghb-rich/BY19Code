@@ -34,9 +34,9 @@ logger = logging.getLogger(__name__)
 
 @click.command()
 @click.option("--config", help="配置文件路径")
-@click.option("--project", help="项目根目录", default=".")
+@click.option("--project", help="项目根目录", default=None)
 @click.version_option(version="0.1.0", prog_name="BY19Code")
-def main(config: str | None, project: str):
+def main(config: str | None, project: str | None):
     """BY19Code - AI 编程助手
 
     一个运行在 Windows 系统上的终端交互式 AI 编程助手。
@@ -56,20 +56,47 @@ def main(config: str | None, project: str):
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
             logger.info("[主程序] 已设置 Windows 事件循环策略")
 
+        # 确定项目根目录
+        if project is None:
+            # 询问用户选择项目目录
+            from rich.console import Console
+            from rich.prompt import Prompt
+
+            console = Console()
+            console.print("\n[bold cyan]欢迎使用 BY19Code[/bold cyan]")
+            console.print("\n请指定项目工作目录：")
+            console.print("  1. 使用当前目录")
+            console.print("  2. 指定其他目录")
+
+            choice = Prompt.ask("\n请选择", choices=["1", "2"], default="1")
+
+            if choice == "1":
+                project_root = Path.cwd()
+            else:
+                project_path = Prompt.ask("请输入项目目录路径")
+                project_root = Path(project_path).resolve()
+
+                # 验证目录是否存在
+                if not project_root.exists():
+                    console.print(f"[yellow]目录不存在，将创建: {project_root}[/yellow]")
+                    project_root.mkdir(parents=True, exist_ok=True)
+        else:
+            project_root = Path(project).resolve()
+
         # 加载配置
-        logger.info("[主程序] 加载配置: config=%s, project=%s", config, project)
+        logger.info("[主程序] 加载配置: config=%s, project=%s", config, project_root)
 
         # 如果指定了配置文件，需要特殊处理
         if config:
             # TODO: 支持自定义配置文件路径
             logger.warning("[主程序] --config 参数暂不支持，将使用默认配置")
 
-        # 解析项目根目录
-        project_root = Path(project).resolve()
-
         # 加载配置（从项目目录或全局配置）
         app_config = load_config(project_dir=project_root)
         logger.info("[主程序] 配置加载完成: active_provider=%s", app_config.active_provider)
+
+        # 保存当前工作目录到配置
+        app_config.workspace.default_path = str(project_root)
 
         # 初始化数据库
         logger.info("[主程序] 初始化数据库: %s", app_config.database.path)

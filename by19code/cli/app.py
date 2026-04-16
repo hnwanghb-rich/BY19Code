@@ -10,6 +10,7 @@ from pathlib import Path
 from by19code.config.settings import AppConfig
 from by19code.core.engine import ChatEngine
 from by19code.cli.renderer import Renderer
+from by19code.core.project_init import check_and_init_project
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +39,19 @@ class CLIApp:
         self.engine = ChatEngine(config, project_root)
         self.renderer = Renderer()
 
+        # 检查并初始化项目（生成 BY19Code.md）
+        check_and_init_project(project_root)
+
         logger.info("[CLI] 初始化完成: project=%s", project_root)
 
     async def run(self) -> None:
         """主 REPL 循环。"""
         # 显示欢迎信息
         self.renderer.render_welcome()
+
+        # 显示当前项目信息
+        project_name = self.project_root.name
+        self.renderer.render_project_info(str(self.project_root), project_name)
 
         try:
             while True:
@@ -129,6 +137,11 @@ class CLIApp:
             elif cmd == "/cost":
                 result = await self.engine.get_cost_summary()
                 self.renderer.print_info(result)
+
+            elif cmd == "/project":
+                # 显示当前项目信息
+                project_name = self.project_root.name
+                self.renderer.render_project_info(str(self.project_root), project_name)
 
             elif cmd == "/switch":
                 if not args:

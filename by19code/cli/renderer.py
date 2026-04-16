@@ -86,11 +86,23 @@ class Renderer:
             "  [cyan]/compact[/cyan]  - 压缩上下文（保留最近 10 条消息）\n"
             "  [cyan]/stats[/cyan]    - 查看上下文统计\n"
             "  [cyan]/cost[/cyan]     - 查看费用汇总\n"
+            "  [cyan]/project[/cyan]  - 显示当前项目信息\n"
             "  [cyan]/exit[/cyan]     - 退出程序\n\n"
             "[dim]直接输入文本开始对话。按 Ctrl+C 可随时中断。[/dim]"
         )
 
         self.console.print(Panel.fit(welcome_text, title="[bold]欢迎使用[/bold]"))
+
+    def render_project_info(self, project_root: str, project_name: str) -> None:
+        """显示当前项目信息。
+
+        参数
+        ----
+        project_root : 项目根目录
+        project_name : 项目名称
+        """
+        self.console.print(f"\n[bold cyan]当前项目：[/bold cyan][bold]{project_name}[/bold]")
+        self.console.print(f"[dim]工作目录：{project_root}[/dim]\n")
 
     def render_prompt(self) -> str:
         """显示输入提示符并读取用户输入。
