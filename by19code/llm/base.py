@@ -159,6 +159,9 @@ StreamEventType = Literal[
     "tool_call_start",  # 工具调用开始（data: ToolCall，arguments 可能为空 dict）
     "tool_call_delta",  # 工具调用参数增量（data: str，JSON 片段）
     "tool_call_end",    # 工具调用完整结束（data: ToolCall，含完整 arguments）
+    "tool_executing_start",  # 工具开始执行（data: str 工具名称）
+    "tool_executing_end",    # 工具执行结束（data: str 工具名称）
+    "processing",       # 正在处理（data: str 提示信息）
     "usage",            # Token 用量（data: TokenUsage）
     "done",             # 响应完全结束（data: LLMResponse | None）
     "error",            # 发生错误（data: str 错误信息）
@@ -170,13 +173,16 @@ class StreamEvent(BaseModel):
 
     event_type → data 类型对应关系
     --------------------------------
-    "text_delta"      → str
-    "tool_call_start" → ToolCall（arguments 可能为空 dict，流式积累中）
-    "tool_call_delta" → str（arguments JSON 增量片段）
-    "tool_call_end"   → ToolCall（arguments 已完整）
-    "usage"           → TokenUsage
-    "done"            → LLMResponse | None
-    "error"           → str（错误描述）
+    "text_delta"           → str
+    "tool_call_start"      → ToolCall（arguments 可能为空 dict，流式积累中）
+    "tool_call_delta"      → str（arguments JSON 增量片段）
+    "tool_call_end"        → ToolCall（arguments 已完整）
+    "tool_executing_start" → str（工具名称）
+    "tool_executing_end"   → str（工具名称）
+    "processing"           → str（提示信息）
+    "usage"                → TokenUsage
+    "done"                 → LLMResponse | None
+    "error"                → str（错误描述）
 
     用法示例
     --------
@@ -186,6 +192,8 @@ class StreamEvent(BaseModel):
                 print(event.data, end="", flush=True)
             case "tool_call_end":
                 handle_tool(event.data)   # ToolCall
+            case "tool_executing_start":
+                show_tool_timer(event.data)  # str
             case "usage":
                 record_cost(event.data)   # TokenUsage
             case "done":
