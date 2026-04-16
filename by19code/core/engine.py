@@ -147,6 +147,60 @@ class ChatEngine:
         self.context.add_message(Message(role="system", content=system_content))
         logger.debug("[引擎] System Prompt 已初始化 (supports_tools=%s)", supports_tools)
 
+    def _clean_incomplete_tool_calls(self) -> None:
+        """清理对话历史中不完整的工具调用。
+
+        移除没有对应工具结果的 assistant 消息（包含 tool_calls）。
+        这可以避免切换模型后出现格式错误。
+        """
+        messages = self.context.get_messages()
+        cleaned_messages = []
+        pending_tool_calls = set()  # 等待结果的 tool_call_id
+
+        for msg in messages:
+            if msg.role == "assistant" and msg.tool_calls:
+                # 记录这个 assistant 消息中的所有 tool_call_id
+                tool_call_ids = {tc.id for tc in msg.tool_calls}
+                pending_tool_calls.update(tool_call_ids)
+                cleaned_messages.append(msg)
+
+            elif msg.role == "tool":
+                # 工具结果消息，移除对应的 pending tool_call_id
+                if msg.tool_call_id in pending_tool_calls:
+                    pending_tool_calls.remove(msg.tool_call_id)
+                cleaned_messages.append(msg)
+
+            else:
+                # 其他消息直接保留
+                cleaned_messages.append(msg)
+
+        # 如果还有未完成的工具调用，移除最后一个包含工具调用的 assistant 消息
+        if pending_tool_calls:
+            logger.warning(
+                "[引擎] 检测到 %d 个未完成的工具调用，清理对话历史",
+                len(pending_tool_calls)
+            )
+
+            # 从后往前找到最后一个包含工具调用的 assistant 消息并移除
+            for i in range(len(cleaned_messages) - 1, -1, -1):
+                msg = cleaned_messages[i]
+                if msg.role == "assistant" and msg.tool_calls:
+                    # 检查这个消息的工具调用是否在 pending 中
+                    msg_tool_ids = {tc.id for tc in msg.tool_calls}
+                    if msg_tool_ids & pending_tool_calls:  # 有交集
+                        logger.info("[引擎] 移除不完整的 assistant 消息（索引 %d）", i)
+                        cleaned_messages.pop(i)
+                        # 移除对应的 pending tool_call_ids
+                        pending_tool_calls -= msg_tool_ids
+
+                        # 如果所有 pending 都清理完了，停止
+                        if not pending_tool_calls:
+                            break
+
+        # 更新上下文
+        self.context._messages = cleaned_messages
+        logger.debug("[引擎] 对话历史清理完成，剩余 %d 条消息", len(cleaned_messages))
+
     def _get_next_available_provider(self) -> str | None:
         """获取下一个可用的模型（优先选择超时次数最少的）。
 
@@ -438,10 +492,21 @@ class ChatEngine:
             old_provider = self.provider.provider_name
             self.provider = new_provider
 
+            # 清理对话历史中不完整的工具调用
+            self._clean_incomplete_tool_calls()
+
             # 重新初始化 System Prompt（因为工具支持可能不同）
             # 清除旧的 system 消息
             messages = self.context.get_messages()
             if messages and messages[0].role == "system":
+                messages.pop(0)
+
+            # 添加新的 system 消息
+            self._init_system_prompt()
+
+            logger.info("[引擎] 切换模型: %s → %s", old_provider, provider_name)
+
+            return f"[成功] 已切换到 {provider_name}"
                 messages.pop(0)
 
             # 添加新的 system 消息
