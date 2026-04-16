@@ -44,7 +44,7 @@
       "max_tokens": 8192,
       "cost_per_1k_input": 0.015,
       "cost_per_1k_output": 0.015,
-      "supports_tools": false
+      "supports_tools": true
     }
   ],
   "active_provider": "claude",

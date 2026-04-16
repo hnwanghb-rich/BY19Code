@@ -614,26 +614,46 @@ BY19Code v0.1.0 - AI 编程助手
 
 **功能描述**：支持在运行时切换项目工作目录，无需重启程序。
 
+**命令格式**：
+- `/path <目录路径>` - 直接切换到指定目录
+- `/path` - 交互式询问目录路径
+- `/switch-project` - 同 `/path`（别名）
+
 **实现方式**：
-- 使用 `/switch-project` 命令切换目录
 - 切换时不执行初始化操作（如生成 BY19Code.md）
 - 切换后自动搜索项目描述文件并显示
 - 更新引擎的项目根目录和 System Prompt
+- 检查目录是否为空，给出相应提示
 
-**用户交互**：
+**用户交互示例 1（带参数）**：
 ```
-> /switch-project
-
-[切换项目目录]
-当前目录: D:\ClaudeCodeX\BY19Code
-
-请输入新的项目目录路径: D:\Projects\MyApp
+> /path D:\Projects\MyApp
 
 [成功] 已切换到: D:\Projects\MyApp
 
-当前项目：MyApp
+当前工作目录：D:\Projects\MyApp
+属于项目：MyApp
 项目描述：一个示例应用程序
-工作目录：D:\Projects\MyApp
+```
+
+**用户交互示例 2（空目录）**：
+```
+> /path D:\Projects\NewProject
+
+[成功] 已切换到: D:\Projects\NewProject
+
+当前工作目录：D:\Projects\NewProject
+（目录为空）
+```
+
+**用户交互示例 3（无项目描述）**：
+```
+> /path D:\Projects\SomeProject
+
+[成功] 已切换到: D:\Projects\SomeProject
+
+当前工作目录：D:\Projects\SomeProject
+（未找到项目描述文件）
 ```
 
 **代码位置**：
@@ -706,18 +726,52 @@ BY19Code v0.1.0 - AI 编程助手
 - 不支持工具的模型不会传递工具定义给 API
 - System Prompt 会根据工具支持情况调整
 
+**模型工具支持情况**：
+- **Claude / DeepSeek / OpenAI / Kimi / Doubao / GLM**：完全支持工具调用
+- **MiniMax**：支持工具调用，但可能对工具数量或复杂度有限制
+
+**注意事项**：
+- 如果某个模型在使用工具时出现 400 错误，可以在配置中设置 `"supports_tools": false`
+- 设置为 `false` 后，该模型只能提供建议和代码示例，无法直接操作文件
+- 用户需要手动执行模型建议的操作
+
 **用户体验**：
 ```
 [可用模型]
   1. claude - Claude (Anthropic) [OK]
   2. deepseek - DeepSeek [OK]
-* 3. minimax - MiniMax [OK] [仅对话]
+* 3. minimax - MiniMax [OK]
 ```
 
 **代码位置**：
 - `by19code/config/settings.py` - `LLMProviderConfig.supports_tools`
 - `by19code/core/engine.py` - 根据配置决定是否传递工具
 - `by19code/cli/app.py` - 显示工具支持标识
+
+---
+
+### 5.11 模型工具调用问题排查
+
+**问题描述**：某些模型（如 MiniMax）在使用时只输出代码，不写入文件。
+
+**原因分析**：
+1. 模型配置中 `supports_tools` 设置为 `false`
+2. 模型 API 返回 400 错误（工具定义格式或数量问题）
+3. 模型不支持 OpenAI function calling 格式
+
+**解决方案**：
+1. 检查配置文件中的 `supports_tools` 设置
+2. 如果设置为 `false`，改为 `true` 并测试
+3. 如果出现 400 错误，查看错误信息判断是否为工具数量限制
+4. 必要时保持 `supports_tools: false`，模型将以纯对话模式工作
+
+**配置示例**：
+```json
+{
+  "name": "minimax",
+  "supports_tools": true  // 改为 true 启用工具调用
+}
+```
 
 ---
 

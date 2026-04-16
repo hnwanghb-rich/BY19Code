@@ -141,9 +141,14 @@ class CLIApp:
                 # 显示当前项目信息
                 await self._show_project_info()
 
-            elif cmd == "/switch-project":
+            elif cmd in ["/switch-project", "/path"]:
                 # 切换项目目录
-                await self._switch_project_directory()
+                if args:
+                    # 如果提供了路径参数，直接切换
+                    await self._switch_project_directory(args)
+                else:
+                    # 否则交互式询问
+                    await self._switch_project_directory()
 
             elif cmd == "/switch":
                 if not args:
@@ -302,16 +307,24 @@ class CLIApp:
 
         return ""
 
-    async def _switch_project_directory(self) -> None:
-        """切换项目工作目录。"""
+    async def _switch_project_directory(self, path: str = "") -> None:
+        """切换项目工作目录。
+
+        参数
+        ----
+        path : 新的项目目录路径（可选）
+        """
         from rich.prompt import Prompt
 
-        self.renderer.print_info("\n[切换项目目录]")
-        self.renderer.print_info(f"当前目录: {self.project_root}")
+        # 如果没有提供路径，交互式询问
+        if not path:
+            self.renderer.print_info("\n[切换项目目录]")
+            self.renderer.print_info(f"当前目录: {self.project_root}")
 
-        # 询问新目录
-        new_path = Prompt.ask("\n请输入新的项目目录路径")
-        new_project_root = Path(new_path).resolve()
+            # 询问新目录
+            path = Prompt.ask("\n请输入新的项目目录路径")
+
+        new_project_root = Path(path).resolve()
 
         # 验证目录是否存在
         if not new_project_root.exists():
@@ -337,9 +350,32 @@ class CLIApp:
 
         logger.info("[CLI] 切换项目目录: %s → %s", old_root, new_project_root)
 
-        # 显示新项目信息
-        self.renderer.print_success(f"\n[成功] 已切换到: {new_project_root}")
-        await self._show_project_info()
+        # 显示切换成功和新项目信息
+        self.renderer.print_success(f"\n[成功] 已切换到: {new_project_root}\n")
+
+        # 显示详细的项目信息
+        project_name = new_project_root.name
+        project_desc = self._find_project_description()
+
+        # 检查目录是否为空
+        try:
+            has_files = any(new_project_root.iterdir())
+        except Exception:
+            has_files = False
+
+        if has_files and project_desc:
+            # 有文件且找到项目描述
+            self.renderer.console.print(f"[bold cyan]当前工作目录：[/bold cyan]{new_project_root}")
+            self.renderer.console.print(f"[bold cyan]属于项目：[/bold cyan][bold]{project_name}[/bold]")
+            self.renderer.console.print(f"[dim]项目描述：{project_desc}[/dim]\n")
+        elif has_files:
+            # 有文件但没有找到项目描述
+            self.renderer.console.print(f"[bold cyan]当前工作目录：[/bold cyan]{new_project_root}")
+            self.renderer.console.print(f"[dim]（未找到项目描述文件）[/dim]\n")
+        else:
+            # 空目录
+            self.renderer.console.print(f"[bold cyan]当前工作目录：[/bold cyan]{new_project_root}")
+            self.renderer.console.print(f"[yellow]（目录为空）[/yellow]\n")
 
     async def _handle_chat(self, user_input: str) -> None:
         """处理普通对话。
