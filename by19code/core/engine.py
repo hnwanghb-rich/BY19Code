@@ -507,14 +507,6 @@ class ChatEngine:
             logger.info("[引擎] 切换模型: %s → %s", old_provider, provider_name)
 
             return f"[成功] 已切换到 {provider_name}"
-                messages.pop(0)
-
-            # 添加新的 system 消息
-            self._init_system_prompt()
-
-            logger.info("[引擎] 切换模型: %s → %s", old_provider, provider_name)
-
-            return f"[成功] 已切换到 {provider_name}"
 
         except Exception as e:
             error_msg = f"[错误] 切换模型失败: {e}"
