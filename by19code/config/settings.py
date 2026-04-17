@@ -56,6 +56,8 @@ class LLMProviderConfig(BaseModel):
     max_tokens: int = 8192
     cost_per_1k_input: float = 0.0
     cost_per_1k_output: float = 0.0
+    # 模型友好显示名称（用于 Endpoint ID 等不可读的模型标识）
+    model_label: str = ""
     # 是否支持工具调用（某些模型不支持 function calling）
     supports_tools: bool = True
 
@@ -167,10 +169,27 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     """
     深度合并两个字典，override 的值覆盖 base。
     嵌套 dict 递归合并；list 和其他类型直接替换。
+    llm_providers 列表按 name 字段合并，空字符串不覆盖非空值。
     """
     result = base.copy()
     for key, val in override.items():
-        if (
+        if key == "llm_providers" and isinstance(val, list) and isinstance(result.get(key), list):
+            # 按 name 合并 providers，空字符串不覆盖非空值
+            base_map = {p["name"]: p for p in result[key] if isinstance(p, dict) and "name" in p}
+            for p in val:
+                if not isinstance(p, dict) or "name" not in p:
+                    continue
+                name = p["name"]
+                if name in base_map:
+                    merged = base_map[name].copy()
+                    for k, v in p.items():
+                        if v != "" or merged.get(k) == "":
+                            merged[k] = v
+                    base_map[name] = merged
+                else:
+                    base_map[name] = p
+            result[key] = list(base_map.values())
+        elif (
             key in result
             and isinstance(result[key], dict)
             and isinstance(val, dict)

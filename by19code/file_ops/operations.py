@@ -85,8 +85,14 @@ def _validate_path(path: str | Path, project_root: str | Path) -> Path:
     """
     try:
         # 转换为 Path 对象
-        target_path = Path(path)
+        target_path = Path(str(path))
         root_path = Path(project_root).resolve()
+
+        # 自动修正：以 / 开头的伪绝对路径（如 /src/main.py）转为相对路径
+        path_str = str(path)
+        if path_str.startswith("/") and not Path(path_str).drive:
+            target_path = Path(path_str.lstrip("/"))
+            logger.warning("[文件操作] 自动修正路径: '%s' -> '%s'", path_str, target_path)
 
         # 如果是相对路径，基于 project_root 解析
         if not target_path.is_absolute():

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from pathlib import Path
 from typing import AsyncGenerator, Optional
@@ -112,14 +113,27 @@ class ChatEngine:
             tools_info = """
 ## 当前项目
 - 项目路径：{project_root}
-- 你可以使用以下工具：read_file, write_file, edit_file, run_command, list_directory, git_commit, git_diff, git_log, git_status, git_create_branch
+- 可用工具：read_file, write_file, edit_file, run_command, list_directory, git_commit, git_diff, git_log, git_status, git_create_branch
 
-## 工作原则
-- 修改文件前先读取确认内容
-- 一次只修改一个文件
-- 修改后说明做了什么改动
-- 执行命令前说明要执行什么
-- 使用工具时要谨慎，确保操作的正确性
+## CRITICAL RULES - YOU MUST FOLLOW THESE RULES STRICTLY
+- You MUST use tools to write/read/edit files. Do NOT simulate tool calls as text.
+- To CREATE a file: call the `write_file` tool (you may also show the code in your reply)
+- To MODIFY a file: call the `edit_file` tool
+- To READ a file: call the `read_file` tool
+- When writing code, ALWAYS call `write_file` to save it — showing code in the reply is allowed, but the tool call is MANDATORY.
+- DO NOT output tool calls as text like `functions.write_file(...)`. You MUST use the actual API tool calling mechanism.
+
+## FILE PATH RULES - CRITICAL
+- ALL file paths MUST be RELATIVE paths, never absolute paths.
+- CORRECT: `main.py`, `src/main.py`, `myproject/utils/helper.py`
+- WRONG: `/main.py`, `/src/main.py`, `C:/main.py`, `D:/main.py`
+- The project root is already: {{project_root}} — just use relative paths inside it.
+
+## 强制规则
+- 创建文件：必须调用 write_file 工具（回复中展示代码是允许的，但工具调用是必须的）
+- 修改文件：必须调用 edit_file 工具
+- 文件路径必须使用相对路径，禁止使用 /filename 或 C:/filename 等绝对路径
+- 禁止用文本格式模拟工具调用（如 functions.xxx(...)），必须使用 API 工具调用机制
 """
         else:
             tools_info = """
@@ -409,8 +423,13 @@ class ChatEngine:
                 if hasattr(response, "usage") and response.usage:
                     await self._record_token_usage(response.usage, response.model)
 
-            # 5. 如果没有工具调用，结束循环
+            # 5. 如果没有工具调用，尝试从文本中提取代码块并写文件
             if not tool_calls:
+                if accumulated_text:
+                    written = await self._extract_and_write_code(accumulated_text)
+                    if written:
+                        for msg in written:
+                            yield StreamEvent(event_type="processing", data=msg)
                 logger.info("[引擎] 对话完成，无工具调用")
                 break
 
@@ -506,7 +525,14 @@ class ChatEngine:
 
             logger.info("[引擎] 切换模型: %s → %s", old_provider, provider_name)
 
-            return f"[成功] 已切换到 {provider_name}"
+            new_config = self.config.get_active_provider()
+            if new_config and new_config.model_label:
+                model_str = new_config.model_label
+            elif new_config:
+                model_str = new_config.model
+            else:
+                model_str = provider_name
+            return f"[成功] 已切换到 {provider_name}【{model_str}】"
 
         except Exception as e:
             error_msg = f"[错误] 切换模型失败: {e}"
@@ -605,3 +631,48 @@ class ChatEngine:
             )
         except Exception as e:
             logger.error("[引擎] 记录 token 用量失败: %s", e)
+
+    async def _extract_and_write_code(self, text: str) -> list[str]:
+        """从模型文本回复中提取代码块并写入文件。
+
+        匹配格式：
+          ```python:path/to/file.py
+          ...code...
+          ```
+        或：
+          ```python
+          # filename: path/to/file.py
+          ...code...
+          ```
+        """
+        from by19code.file_ops.operations import write_file, FileOperationError
+
+        written: list[str] = []
+
+        # 模式1: ```lang:filepath
+        pattern1 = re.compile(
+            r"```[a-zA-Z]*:([^\n]+)\n(.*?)```",
+            re.DOTALL,
+        )
+        # 模式2: ```lang\n# filename: filepath
+        pattern2 = re.compile(
+            r"```[a-zA-Z]*\n#\s*(?:filename|file)[:\s]+([^\n]+)\n(.*?)```",
+            re.DOTALL,
+        )
+
+        matches: list[tuple[str, str]] = []
+        for m in pattern1.finditer(text):
+            matches.append((m.group(1).strip(), m.group(2)))
+        for m in pattern2.finditer(text):
+            matches.append((m.group(1).strip(), m.group(2)))
+
+        for filepath, content in matches:
+            try:
+                write_file(filepath, content, self.project_root)
+                msg = f"[自动写入] {filepath}"
+                logger.info("[引擎] %s", msg)
+                written.append(msg)
+            except FileOperationError as e:
+                logger.warning("[引擎] 自动写入失败 %s: %s", filepath, e)
+
+        return written

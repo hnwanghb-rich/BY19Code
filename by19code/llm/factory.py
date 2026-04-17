@@ -157,6 +157,7 @@ class LLMFactory:
         ----------------------
         "anthropic"   → ClaudeProvider(api_key, model, base_url)
         "openai_compat" → OpenAICompatibleProvider(api_key, model, base_url, provider_name)
+        "gemini"      → GeminiProvider(api_key, model)
 
         base_url 空字符串统一转为 None（使用各 Provider 的默认端点）。
         """
@@ -171,6 +172,13 @@ class LLMFactory:
                 kwargs["base_url"] = base_url
             return kwargs
 
+        if cfg.provider_type == "gemini":
+            kwargs = {
+                "api_key": cfg.api_key,
+                "model": cfg.model,
+            }
+            return kwargs
+
         if cfg.provider_type == "openai_compat":
             kwargs = {
                 "api_key": cfg.api_key,
@@ -183,7 +191,7 @@ class LLMFactory:
 
         raise ValueError(
             f"未知的 provider_type: '{cfg.provider_type}'。"
-            f"支持的类型: 'anthropic', 'openai_compat'。"
+            f"支持的类型: 'anthropic', 'openai_compat', 'gemini'。"
         )
 
 
@@ -219,15 +227,19 @@ def switch_provider(name: str, config: AppConfig) -> LLMProvider:
 # 模块加载时自动注册默认 Provider
 # ---------------------------------------------------------------------------
 
-# 延迟导入避免循环依赖：factory → base（已完成），factory → claude/openai（此处发生）
-# ClaudeProvider / OpenAICompatibleProvider 的 __init__ 内部才会 import anthropic/openai，
+# 延迟导入避免循环依赖：factory → base（已完成），factory → claude/openai/gemini（此处发生）
+# ClaudeProvider / OpenAICompatibleProvider / GeminiProvider 的 __init__ 内部才会 import SDK，
 # 因此此处仅注册类引用，不触发 SDK 导入。
 
 from by19code.llm.claude_provider import ClaudeProvider  # noqa: E402
 from by19code.llm.openai_provider import OpenAICompatibleProvider  # noqa: E402
+from by19code.llm.gemini_provider import GeminiProvider  # noqa: E402
 
 # 注册 Anthropic Provider
 LLMFactory.register("claude", ClaudeProvider)
+
+# 注册 Gemini Provider（原生 SDK）
+LLMFactory.register("gemini", GeminiProvider)
 
 # 注册 OpenAI 兼容 Provider（所有使用 OpenAI API 格式的模型）
 LLMFactory.register("openai", OpenAICompatibleProvider)
@@ -236,3 +248,4 @@ LLMFactory.register("minimax", OpenAICompatibleProvider)
 LLMFactory.register("kimi", OpenAICompatibleProvider)
 LLMFactory.register("doubao", OpenAICompatibleProvider)
 LLMFactory.register("glm", OpenAICompatibleProvider)
+LLMFactory.register("qwen", OpenAICompatibleProvider)

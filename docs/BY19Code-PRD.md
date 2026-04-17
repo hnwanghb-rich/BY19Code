@@ -823,7 +823,40 @@ BY19Code v0.1.0 - AI 编程助手
 
 ---
 
-### 5.12 智能模型自动切换
+### 5.12 启动时显示当前使用模型
+
+**功能描述**：在程序启动时，显示当前配置的 LLM 模型，即上次退出时使用的模型。
+
+**实现方式**：
+- 读取配置文件中的 `active_provider` 字段
+- 在项目信息中显示当前使用的模型名称和显示名称
+- 格式：`当前使用模型：{模型名称} ({显示名称})`
+
+**用户体验**：
+```
+BY19Code v0.1.0 - AI 编程助手
+
+当前项目：BY19Code
+项目描述：BY19Code 开发约束
+工作目录：D:\ClaudeCodeX\BY19Code
+当前使用模型：deepseek (DeepSeek)
+
+>
+```
+
+**配置持久化**：
+- 每次使用 `/model` 命令切换模型时，自动更新 `active_provider`
+- 配置保存到全局配置文件 `%USERPROFILE%\.by19code\config.json`
+- 下次启动时自动加载上次使用的模型
+
+**代码位置**：
+- `by19code/cli/app.py` - `_show_project_info()` 方法获取并传递模型信息
+- `by19code/cli/renderer.py` - `render_project_info()` 方法显示模型信息
+- `by19code/config/settings.py` - `active_provider` 字段存储当前模型
+
+---
+
+### 5.13 智能模型自动切换
 
 **功能描述**：当模型响应超时时，自动切换到历史超时次数最少的模型，提高系统可用性。
 

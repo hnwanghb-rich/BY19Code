@@ -198,35 +198,27 @@ async def run_command(
 
     # 3. 执行命令
     try:
-        # 使用 asyncio.create_subprocess_shell 实现异步执行
-        process = await asyncio.create_subprocess_shell(
-            command,
-            cwd=str(cwd_path),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            # Windows 平台：shell=True 会通过 cmd.exe /c 执行
-        )
-
-        # 等待命令完成（带超时）
-        try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                process.communicate(),
+        def _run() -> subprocess.CompletedProcess:
+            return subprocess.run(
+                command,
+                shell=True,
+                cwd=str(cwd_path),
+                capture_output=True,
+                encoding="utf-8",
                 timeout=config.command_timeout_seconds,
+                errors="replace",
             )
+
+        try:
+            proc = await asyncio.to_thread(_run)
         except asyncio.TimeoutError:
-            # 超时：终止进程
-            process.kill()
-            await process.wait()
             raise CommandTimeoutError(
                 f"命令执行超时（{config.command_timeout_seconds}秒）: {command}"
             )
 
-        # 解码输出（UTF-8）
-        stdout = stdout_bytes.decode("utf-8", errors="replace")
-        stderr = stderr_bytes.decode("utf-8", errors="replace")
-        returncode = process.returncode
-
-        # 构造结果
+        stdout = proc.stdout or ""
+        stderr = proc.stderr or ""
+        returncode = proc.returncode
         success = (returncode == 0)
         error_message = None if success else f"命令返回非零退出码: {returncode}"
 

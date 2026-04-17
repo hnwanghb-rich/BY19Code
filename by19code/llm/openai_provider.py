@@ -112,18 +112,34 @@ class OpenAICompatibleProvider(LLMProvider):
                 "openai SDK 未安装，请运行: pip install openai"
             ) from exc
 
-        kwargs: dict[str, Any] = {
-            "api_key": api_key,
-            "timeout": 60.0,  # 设置 60 秒超时，避免流式响应挂起
-            "max_retries": 0,  # 禁用自动重试，避免卡住
-        }
-        if base_url:
-            kwargs["base_url"] = base_url
+        # Gemini 特殊处理：使用 httpx 自定义 client，在每个请求中添加 key 参数
+        if provider_name == "gemini":
+            import httpx
+            # 创建自定义 httpx client，在所有请求中添加 key 参数
+            http_client = httpx.AsyncClient(
+                params={"key": api_key},  # 所有请求都带上 key 参数
+                timeout=60.0,
+            )
+            kwargs: dict[str, Any] = {
+                "api_key": "dummy",  # Gemini 不使用 Authorization header
+                "http_client": http_client,
+                "max_retries": 0,
+            }
+            if base_url:
+                kwargs["base_url"] = base_url
+        else:
+            kwargs: dict[str, Any] = {
+                "api_key": api_key,
+                "timeout": 60.0,
+                "max_retries": 0,
+            }
+            if base_url:
+                kwargs["base_url"] = base_url
 
         self._client = _openai.AsyncOpenAI(**kwargs)
         self._default_model = model
         self._provider_name_val = provider_name
-        self._openai = _openai  # 保存引用，用于异常类型判断
+        self._openai = _openai
 
         logger.debug("[%s] Provider 初始化完成，默认模型: %s", provider_name, model)
 
@@ -257,6 +273,11 @@ class OpenAICompatibleProvider(LLMProvider):
                     name=tc.function.name,
                     arguments=arguments,
                 ))
+        else:
+            logger.debug(
+                "[OpenAI] 模型未返回工具调用，仅返回文本内容（长度: %d）",
+                len(content_text),
+            )
 
         usage = TokenUsage(
             prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
@@ -437,6 +458,9 @@ class OpenAICompatibleProvider(LLMProvider):
         }
         if tools:
             kwargs["tools"] = self._build_api_tools(tools)
+            # 只有 OpenAI 和 DeepSeek 支持 tool_choice 参数
+            if self._provider_name_val in ("openai", "deepseek"):
+                kwargs["tool_choice"] = "auto"
 
         logger.debug(
             "[%s] stream_chat() 开始 model=%s messages=%d",

@@ -946,4 +946,39 @@ git push origin main
 □  5. 完成 T01 后提交 Git，继续 T02
 ```
 
+---
+
+## 产品迭代记录
+
+### 迭代 V2 — API管理 + 模型矩阵 + 连接测试（2026-04-17）
+
+**新增功能：**
+
+1. **/api 命令 — API Key 管理**
+   - 列出所有主流厂商（Claude/DeepSeek/Doubao/Kimi/MiniMax/GLM/OpenAI/Qwen/Gemini）
+   - 表单式输入：选择厂商 → 选择子模型 → 输入/更新 API Key
+   - 自动保存到全局配置 `%USERPROFILE%\.by19code\config.json`
+   - 保存后可立即切换到该模型
+
+2. **模型产品矩阵**
+   - 内置各厂商子模型列表（含 model_id、友好名称、简介）
+   - 选中子模型后显示产品概要
+   - `model_label` 字段支持友好名称显示（如 `Doubao-Seed-2.0 Code`）
+
+3. **切换模型后自动连接测试**
+   - `/model` 和 `/api` 切换后自动发送测试请求
+   - 超时 10s，返回连接正常/超时/失败结果
+
+4. **兼容性修复**
+   - 豆包等国产模型不传 `tool_choice` 参数（避免 400 错误）
+   - 自动修正模型输出的绝对路径（`/file.py` → `file.py`）
+   - 无工具调用时自动提取代码块写入文件
+
+**涉及文件：**
+- `by19code/cli/app.py` — 新增 `/api` 命令、`_manage_api_keys()`、`_test_connection()`
+- `by19code/llm/openai_provider.py` — `tool_choice` 兼容性修复
+- `by19code/file_ops/operations.py` — 路径自动修正
+- `by19code/core/engine.py` — 代码块自动提取写文件
+- `by19code/config/settings.py` — 新增 `model_label` 字段、`_deep_merge` 优化
+
 每天完成 1-2 张卡片，6-8 周内 MVP 上线。

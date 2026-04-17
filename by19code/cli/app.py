@@ -14,6 +14,48 @@ from by19code.core.project_init import check_and_init_project
 
 logger = logging.getLogger(__name__)
 
+# 各厂商模型产品矩阵：(model_id, label, 简介)
+MODEL_MATRIX: dict[str, list[tuple[str, str, str]]] = {
+    "claude": [
+        ("claude-haiku-4-5-20251001", "Haiku 4.5",  "快速轻量，适合简单任务"),
+        ("claude-sonnet-4-6",         "Sonnet 4.6", "均衡性能，推荐日常使用"),
+        ("claude-opus-4-5-20251101",  "Opus 4.5",   "强推理，复杂编程首选"),
+        ("claude-opus-4-6",           "Opus 4.6",   "最强模型，顶级推理能力"),
+    ],
+    "deepseek": [
+        ("deepseek-chat",     "DeepSeek-V3", "通用对话/编程，性价比极高"),
+        ("deepseek-reasoner", "DeepSeek-R1", "推理增强，适合复杂逻辑"),
+    ],
+    "doubao": [
+        ("", "Doubao-Seed-2.0 Code", "编程专用，需填写 Endpoint ID"),
+        ("", "Doubao-Seed-2.0 Pro",  "通用模型，需填写 Endpoint ID"),
+    ],
+    "kimi": [
+        ("moonshot-v1-8k",   "Kimi 8K",   "8K 上下文"),
+        ("moonshot-v1-32k",  "Kimi 32K",  "32K 上下文"),
+        ("moonshot-v1-128k", "Kimi 128K", "128K 长文本"),
+    ],
+    "minimax": [
+        ("abab6.5-chat", "MiniMax abab6.5", "通用对话"),
+    ],
+    "glm": [
+        ("glm-4-plus", "GLM-4 Plus", "旗舰模型"),
+        ("glm-4-air",  "GLM-4 Air",  "轻量快速"),
+    ],
+    "openai": [
+        ("gpt-4o",      "GPT-4o",      "多模态旗舰"),
+        ("gpt-4o-mini", "GPT-4o Mini", "轻量低价"),
+    ],
+    "qwen": [
+        ("qwen-max",  "Qwen-Max",  "通义千问旗舰"),
+        ("qwen-plus", "Qwen-Plus", "均衡性能"),
+    ],
+    "gemini": [
+        ("gemini-2.0-flash", "Gemini 2.0 Flash", "快速响应"),
+        ("gemini-2.5-pro",   "Gemini 2.5 Pro",   "顶级推理"),
+    ],
+}
+
 
 class CLIApp:
     """CLI 主应用
@@ -164,12 +206,23 @@ class CLIApp:
             elif cmd == "/model":
                 # 列出所有可用模型或切换模型
                 if not args:
-                    # 显示交互式选择菜单
                     await self._select_and_switch_model()
                 else:
-                    # 切换到指定模型
                     result = await self.engine.switch_model(args)
-                    self.renderer.print_success(result)
+                    # 显示模型 logo
+                    provider_cfg = self.config.get_active_provider()
+                    if provider_cfg:
+                        self.renderer.render_model_logo(
+                            args,
+                            model_label=provider_cfg.model_label,
+                            model_id=provider_cfg.model
+                        )
+                    else:
+                        self.renderer.print_success(result)
+                    await self._test_connection()
+
+            elif cmd == "/api":
+                await self._manage_api_keys()
 
             elif cmd in ["/exit", "/quit"]:
                 self.renderer.print_warning("再见！")
@@ -212,8 +265,9 @@ class CLIApp:
             self.renderer.console.print(
                 f"{marker}[bold]{idx}.[/bold] [bold]{provider.name}[/bold] - {provider.display_name} {key_status}{tools_status}"
             )
+            model_show = provider.model_label if provider.model_label else provider.model
             self.renderer.console.print(
-                f"    模型: {provider.model} | "
+                f"    模型: {model_show} | "
                 f"费用: {provider.cost_per_1k_input:.2f}/{provider.cost_per_1k_output:.2f} 元/1K tokens"
             )
 
@@ -245,11 +299,129 @@ class CLIApp:
                 self.renderer.print_info(f"[信息] 已经在使用 {selected_name}")
             else:
                 result = await self.engine.switch_model(selected_name)
+                # 显示模型 logo
+                provider_cfg = self.config.get_active_provider()
+                if provider_cfg:
+                    self.renderer.render_model_logo(
+                        selected_name,
+                        model_label=provider_cfg.model_label,
+                        model_id=provider_cfg.model
+                    )
+                else:
+                    self.renderer.print_success(result)
+                await self._test_connection()
+
+    async def _test_connection(self) -> None:
+        """测试当前模型连接是否正常（发送极短消息，超时 10s）。"""
+        import asyncio
+        from by19code.llm.base import Message, LLMError
+
+        self.renderer.print_info("[连接测试] 正在测试当前模型连接...")
+        try:
+            response = await asyncio.wait_for(
+                self.engine.provider.chat(
+                    messages=[Message(role="user", content="hi")],
+                    max_tokens=10,
+                    temperature=0.0,
+                ),
+                timeout=10.0,
+            )
+            self.renderer.print_success(f"[连接测试] 连接正常 (stop_reason={response.stop_reason})")
+        except asyncio.TimeoutError:
+            self.renderer.print_error("[连接测试] 连接超时（10s）")
+        except LLMError as e:
+            self.renderer.print_error(f"[连接测试] 连接失败: {e}")
+        except Exception as e:
+            self.renderer.print_error(f"[连接测试] 未知错误: {e}")
+
+    async def _manage_api_keys(self) -> None:
+        """API Key 管理：表单式选择厂商、子模型、输入 API Key。"""
+        from rich.prompt import Prompt
+        from pathlib import Path
+        from by19code.config.settings import save_config, LLMProviderConfig
+
+        self.renderer.console.print("\n[bold cyan]=== API Key 管理 ===[/bold cyan]")
+
+        # 列出所有厂商
+        providers = list(MODEL_MATRIX.keys())
+        for idx, name in enumerate(providers, 1):
+            cfg = self.config.get_provider(name)
+            has_key = bool(cfg and cfg.api_key)
+            key_status = "[green][OK][/green]" if has_key else "[red][NO][/red]"
+            self.renderer.console.print(f"  [bold]{idx}.[/bold] {name:12s} {key_status}")
+
+        self.renderer.console.print()
+        choice = Prompt.ask("请选择厂商编号", choices=[str(i) for i in range(1, len(providers) + 1)])
+        provider_name = providers[int(choice) - 1]
+
+        # 显示模型矩阵
+        models = MODEL_MATRIX[provider_name]
+        self.renderer.console.print(f"\n[bold cyan]--- {provider_name} 产品矩阵 ---[/bold cyan]")
+        for idx, (model_id, label, desc) in enumerate(models, 1):
+            mid = model_id if model_id else "[需填写 Endpoint ID]"
+            self.renderer.console.print(f"  [bold]{idx}.[/bold] {label:30s} {mid}")
+            self.renderer.console.print(f"       [dim]{desc}[/dim]")
+
+        self.renderer.console.print()
+        model_choice = Prompt.ask("请选择产品编号", choices=[str(i) for i in range(1, len(models) + 1)])
+        selected_model_id, selected_label, _ = models[int(model_choice) - 1]
+
+        # doubao 需要手动输入 Endpoint ID
+        if not selected_model_id:
+            selected_model_id = Prompt.ask(f"请输入 {selected_label} 的 Endpoint ID").strip()
+
+        # 输入 API Key
+        cfg = self.config.get_provider(provider_name)
+        current_key = cfg.api_key if cfg else ""
+        masked = f"{current_key[:8]}..." if len(current_key) > 8 else ("已配置" if current_key else "未配置")
+        new_key = Prompt.ask(f"请输入 API Key（当前: {masked}，回车跳过）", default="").strip()
+
+        # 更新配置
+        if cfg:
+            if new_key:
+                cfg.api_key = new_key
+            cfg.model = selected_model_id
+            cfg.model_label = selected_label
+        else:
+            # 新增 provider 配置
+            from by19code.config.settings import LLMProviderConfig
+            new_cfg = LLMProviderConfig(
+                name=provider_name,
+                display_name=provider_name,
+                provider_type="anthropic" if provider_name == "claude" else "openai_compat",
+                api_key=new_key,
+                base_url="",
+                model=selected_model_id,
+                model_label=selected_label,
+            )
+            self.config.llm_providers.append(new_cfg)
+
+        # 保存到全局配置
+        global_config_path = Path.home() / ".by19code" / "config.json"
+        try:
+            save_config(self.config, global_config_path)
+            self.renderer.print_success(f"[成功] 已保存 {provider_name}【{selected_label}】配置")
+        except Exception as e:
+            self.renderer.print_error(f"[错误] 保存失败: {e}")
+            return
+
+        # 询问是否立即切换
+        switch = Prompt.ask("是否立即切换到该模型？", choices=["y", "n"], default="y")
+        if switch == "y":
+            result = await self.engine.switch_model(provider_name)
+            # 显示模型 logo
+            provider_cfg = self.config.get_active_provider()
+            if provider_cfg:
+                self.renderer.render_model_logo(
+                    provider_name,
+                    model_label=provider_cfg.model_label,
+                    model_id=provider_cfg.model
+                )
+            else:
                 self.renderer.print_success(result)
+            await self._test_connection()
 
     async def _toggle_auto_switch_mode(self) -> None:
-        """切换自动切换模式。"""
-        from rich.prompt import Prompt
 
         current_mode = self.config.safety.auto_switch_on_timeout
         current_timeout = self.config.safety.change_model_time
@@ -297,16 +469,27 @@ class CLIApp:
             self.renderer.print_info(f"\n[信息] 保持当前设置：{'启用' if current_mode else '禁用'}")
 
     async def _show_project_info(self) -> None:
-        """显示当前项目信息（包括项目描述）。"""
+        """显示当前项目信息（包括项目描述和当前使用的模型）。"""
         project_name = self.project_root.name
 
         # 搜索项目描述文件
         project_desc = self._find_project_description()
 
+        # 获取当前使用的模型信息
+        current_provider = self.config.active_provider
+        provider_config = self.config.get_active_provider()
+        model_display_name = provider_config.display_name if provider_config else current_provider
+        model_label = provider_config.model_label if provider_config and provider_config.model_label else ""
+        model_id = provider_config.model if provider_config else ""
+
         self.renderer.render_project_info(
             str(self.project_root),
             project_name,
-            project_desc
+            project_desc,
+            current_provider,
+            model_display_name,
+            model_label,
+            model_id,
         )
 
     def _find_project_description(self) -> str:
@@ -463,8 +646,9 @@ class CLIApp:
 
             # 调用引擎并流式渲染响应
             async for event in self.engine.chat(user_input):
-                # 停止等待计时器（收到第一个事件）
-                self.renderer.stop_waiting_timer()
+                # 只在收到实际 LLM 响应时停止等待计时器
+                if event.event_type in ("text_delta", "tool_call_start", "error", "done"):
+                    self.renderer.stop_waiting_timer()
 
                 # 渲染事件
                 self.renderer.render_stream(event)
